@@ -11,7 +11,7 @@
 
 import { Canvas } from "@react-three/fiber";
 import { useState } from "react";
-import { ScrollController, useScrollState } from "@/components/ScrollController";
+import { ScrollController } from "@/components/ScrollController";
 import { CameraRig } from "@/components/CameraRig";
 import { SceneManager } from "@/components/SceneManager";
 import { ChapterNavigation } from "@/components/ChapterNavigation";
@@ -60,18 +60,14 @@ export function Experience() {
       <div className="canvas-layer" aria-hidden={!started}>
         <Canvas
           camera={{ position: [0, 4, 40], fov: 42, near: 0.1, far: 1000 }}
-          gl={{ antialias: true, powerPreference: "high-performance" }}
-          dpr={[1, 1.75]}
+          gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
+          dpr={[1, 1.65]}
         >
-          <color attach="background" args={["#0e0d0b"]} />
-          <fog attach="fog" args={["#16294D", 30, 140]} />
-          <ambientLight intensity={0.35} color="#E8DFC8" />
-          <directionalLight
-            position={[20, 30, 10]}
-            intensity={1.4}
-            color="#C9A227"
-            castShadow
-          />
+          <color attach="background" args={["#2b211c"]} />
+          <fog attach="fog" args={["#846449", 42, 170]} />
+          <ambientLight intensity={0.24} color="#e7c89a" />
+          <hemisphereLight args={["#e4bd86", "#251a14", 0.62]} />
+          <directionalLight position={[-25, 30, 35]} intensity={1.65} color="#f0a85f" />
           <CameraRig />
           <SceneManager />
         </Canvas>
