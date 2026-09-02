@@ -14,6 +14,7 @@ type BabylonMaterials = {
   blue: THREE.MeshPhysicalMaterial;
   blueDark: THREE.MeshPhysicalMaterial;
   mud: THREE.MeshStandardMaterial;
+  city: THREE.MeshStandardMaterial;
   mudDark: THREE.MeshStandardMaterial;
   stone: THREE.MeshStandardMaterial;
   gold: THREE.MeshPhysicalMaterial;
@@ -42,7 +43,7 @@ function makeRiverGeometry() {
     const center = riverCenterAt(z);
     for (let column = 0; column <= columns; column += 1) {
       const across = column / columns;
-      positions.push(center + THREE.MathUtils.lerp(-12.5, 12.5, across), -0.2, z);
+      positions.push(center + THREE.MathUtils.lerp(-12.5, 12.5, across), 0.16, z);
       uvs.push(across, t * 9);
     }
   }
@@ -51,7 +52,7 @@ function makeRiverGeometry() {
     for (let column = 0; column < columns; column += 1) {
       const a = row * (columns + 1) + column;
       const b = a + columns + 1;
-      indices.push(a, b, a + 1, b, b + 1, a + 1);
+      indices.push(a, a + 1, b, b, a + 1, b + 1);
     }
   }
 
@@ -77,7 +78,7 @@ function makeBankGeometry(side: -1 | 1) {
     const rough = Math.sin(t * 37) * 0.38 + Math.sin(t * 91) * 0.14;
     const riverEdge = 12.25 + rough;
     const offsets = [riverEdge, riverEdge + 2.5, riverEdge + 7, riverEdge + 17, riverEdge + 36, riverEdge + 82];
-    const heights = [-0.2, 0.18, 0.68, 1.03, 1.18, 1.3];
+    const heights = [-0.06, 0.22, 0.68, 1.03, 1.18, 1.3];
     for (let column = 0; column < columns; column += 1) {
       positions.push(center + offsets[column] * side, heights[column] + rough * 0.09, z);
       uvs.push((column / (columns - 1)) * 7, t * 24);
@@ -88,8 +89,8 @@ function makeBankGeometry(side: -1 | 1) {
     for (let column = 0; column < columns - 1; column += 1) {
       const a = row * columns + column;
       const b = a + columns;
-      if (side === 1) indices.push(a, b, a + 1, b, b + 1, a + 1);
-      else indices.push(a, a + 1, b, b, a + 1, b + 1);
+      if (side === 1) indices.push(a, a + 1, b, b, a + 1, b + 1);
+      else indices.push(a, b, a + 1, b, b + 1, a + 1);
     }
   }
 
@@ -117,7 +118,7 @@ function makeRibbonGeometry(points: THREE.Vector3[], width: number, segments = 7
     uvs.push(0, t * 8, 1, t * 8);
     if (index < segments) {
       const a = index * 2;
-      indices.push(a, a + 2, a + 1, a + 2, a + 3, a + 1);
+      indices.push(a, a + 1, a + 2, a + 2, a + 1, a + 3);
     }
   }
 
@@ -190,65 +191,20 @@ function makeAnimalReliefGeometry() {
 
 function River() {
   const geometry = useMemo(() => makeRiverGeometry(), []);
-  const material = useRef<THREE.ShaderMaterial>(null);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  useFrame(({ clock }) => {
-    if (material.current) material.current.uniforms.uTime.value = clock.elapsedTime;
-  });
 
   return (
     <mesh geometry={geometry} receiveShadow>
-      <shaderMaterial
-        ref={material}
+      <meshPhysicalMaterial
+        color="#1f6379"
+        roughness={0.16}
+        metalness={0.1}
+        clearcoat={1}
+        clearcoatRoughness={0.12}
+        reflectivity={0.8}
         transparent
-        depthWrite
-        uniforms={{
-          uTime: { value: 0 },
-          uDeep: { value: new THREE.Color("#153f52") },
-          uShallow: { value: new THREE.Color("#4d7b79") },
-          uSun: { value: new THREE.Color("#f1bb72") },
-        }}
-        vertexShader={`
-          uniform float uTime;
-          varying vec2 vUv;
-          varying vec3 vWorld;
-          varying vec3 vWaveNormal;
-          void main() {
-            vUv = uv;
-            vec3 p = position;
-            float phaseA = p.z * 0.31 + uTime * 0.72;
-            float phaseB = p.x * 0.73 - p.z * 0.13 - uTime * 0.48;
-            float phaseC = p.z * 0.82 + p.x * 0.24 + uTime * 0.31;
-            float wave = sin(phaseA) * 0.11 + sin(phaseB) * 0.045 + sin(phaseC) * 0.025;
-            p.y += wave;
-            float dx = cos(phaseB) * 0.045 * 0.73 + cos(phaseC) * 0.025 * 0.24;
-            float dz = cos(phaseA) * 0.11 * 0.31 - cos(phaseB) * 0.045 * 0.13 + cos(phaseC) * 0.025 * 0.82;
-            vWaveNormal = normalize(mat3(modelMatrix) * vec3(-dx, 1.0, -dz));
-            vec4 world = modelMatrix * vec4(p, 1.0);
-            vWorld = world.xyz;
-            gl_Position = projectionMatrix * viewMatrix * world;
-          }
-        `}
-        fragmentShader={`
-          uniform float uTime;
-          uniform vec3 uDeep;
-          uniform vec3 uShallow;
-          uniform vec3 uSun;
-          varying vec2 vUv;
-          varying vec3 vWorld;
-          varying vec3 vWaveNormal;
-          void main() {
-            vec3 viewDir = normalize(cameraPosition - vWorld);
-            float fresnel = pow(1.0 - max(dot(viewDir, normalize(vWaveNormal)), 0.0), 2.5);
-            float ripples = sin(vUv.y * 290.0 + uTime * 2.0 + sin(vUv.x * 34.0) * 2.2);
-            float glint = pow(max(ripples * 0.5 + 0.5, 0.0), 18.0) * 0.22;
-            float bankLight = smoothstep(0.02, 0.34, min(vUv.x, 1.0 - vUv.x));
-            vec3 color = mix(uShallow, uDeep, bankLight * 0.78);
-            color = mix(color, vec3(0.48, 0.65, 0.68), fresnel * 0.38);
-            color += uSun * glint * (0.35 + fresnel);
-            gl_FragColor = vec4(color, 0.985);
-          }
-        `}
+        opacity={0.98}
+        side={THREE.DoubleSide}
       />
     </mesh>
   );
@@ -523,11 +479,13 @@ function CitadelAndPalaces({ materials }: { materials: BabylonMaterials }) {
 
 function AccessRoute({ material }: { material: THREE.Material }) {
   const geometry = useMemo(() => makeRibbonGeometry([
-    new THREE.Vector3(-27, 1.22, 39),
-    new THREE.Vector3(-22, 1.25, 31),
-    new THREE.Vector3(-10, 1.28, 24),
-    new THREE.Vector3(5, 1.3, 19),
-    new THREE.Vector3(ROAD_X, 1.32, 12),
+    new THREE.Vector3(-27, 1.35, 50),
+    new THREE.Vector3(-24, 1.38, 40),
+    new THREE.Vector3(-17, 1.4, 29),
+    new THREE.Vector3(-5, 1.42, 17),
+    new THREE.Vector3(7, 1.44, 4),
+    new THREE.Vector3(15, 1.45, -8),
+    new THREE.Vector3(ROAD_X, 1.46, -20),
   ], 8.4), []);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return <mesh geometry={geometry} material={material} receiveShadow />;
@@ -938,6 +896,13 @@ export function BabylonJourneyScene() {
       bumpScale: 0.24,
       color: "#a77a57",
       roughness: 0.93,
+    }),
+    city: new THREE.MeshStandardMaterial({
+      map: mudMap,
+      bumpMap: mudBump,
+      bumpScale: 0.2,
+      color: "#a77a57",
+      roughness: 0.95,
       vertexColors: true,
     }),
     mudDark: new THREE.MeshStandardMaterial({
@@ -976,11 +941,11 @@ export function BabylonJourneyScene() {
         mieCoefficient={0.0065}
         mieDirectionalG={0.86}
       />
-      <color attach="background" args={["#9f806c"]} />
-      <hemisphereLight args={["#f0d4aa", "#2e221d", 1.35]} />
+      <color attach="background" args={["#806f67"]} />
+      <hemisphereLight args={["#e8cfaa", "#251c19", 1.05]} />
       <directionalLight
         position={[-72, 56, 38]}
-        intensity={3.4}
+        intensity={2.55}
         color="#ffd093"
         castShadow
         shadow-mapSize-width={2048}
@@ -1001,7 +966,7 @@ export function BabylonJourneyScene() {
       <ReedsAndStones />
       <RiverBoat position={[RIVER_X - 3.2, 0.02, 55]} scale={0.82} />
       <RiverBoat position={[RIVER_X + 4.1, 0.01, -26]} scale={0.66} />
-      <CityDistrict material={materials.mud} />
+      <CityDistrict material={materials.city} />
       <CitadelAndPalaces materials={materials} />
       <AccessRoute material={materials.stone} />
       <DefensiveCanal />

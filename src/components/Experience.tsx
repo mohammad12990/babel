@@ -104,7 +104,7 @@ export function Experience() {
           dpr={[1, 1.8]}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
-            gl.toneMappingExposure = 1.08;
+            gl.toneMappingExposure = 0.98;
             gl.outputColorSpace = THREE.SRGBColorSpace;
             gl.shadowMap.type = THREE.PCFSoftShadowMap;
             gl.setClearColor(0x98725d, 1);
