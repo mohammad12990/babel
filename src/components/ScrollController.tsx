@@ -1,122 +1,213 @@
 "use client";
 
-// src/components/ScrollController.tsx
-//
-// Owns the DOM scroll surface: one pinned section per scene, each sized by
-// `scrollLengthVh`. Emits { activeSceneIndex, progress } so CameraRig and
-// SceneManager can react without re-implementing scroll math themselves.
-//
-// Architecture note: this is deliberately the ONLY place that touches
-// ScrollTrigger directly. Scene components never register their own
-// triggers — they read progress from context instead. This keeps the
-// "one continuous timeline, not separate pages" requirement enforceable
-// in one file.
-
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { SCENES } from "@/data/scenes";
 
-gsapRegister();
-
-function gsapRegister() {
-  if (typeof window === "undefined") return;
-  // Registered lazily so this file stays import-safe during SSR.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const gsap = require("gsap").gsap;
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const ScrollTrigger = require("gsap/ScrollTrigger").ScrollTrigger;
-  gsap.registerPlugin(ScrollTrigger);
-}
+const JOURNEY_SCENES = SCENES.slice(0, 2);
+const totalJourneyLength = JOURNEY_SCENES.reduce((sum, scene) => sum + scene.scrollLengthVh, 0);
+const approachShare = JOURNEY_SCENES[0].scrollLengthVh / totalJourneyLength;
 
 export interface ScrollState {
   activeSceneId: string;
-  activeSceneIndex: number; // matches SceneDefinition.index (1-based)
-  /** progress 0..1 within the active scene only */
+  activeSceneIndex: number;
   sceneProgress: number;
-  /** progress 0..1 across the entire experience — drives preload look-ahead */
   globalProgress: number;
+  isHoldMode: boolean;
+  isHolding: boolean;
 }
 
-const ScrollContext = createContext<ScrollState>({
-  activeSceneId: SCENES[0].id,
-  activeSceneIndex: 1,
+const initialState: ScrollState = {
+  activeSceneId: JOURNEY_SCENES[0].id,
+  activeSceneIndex: JOURNEY_SCENES[0].index,
   sceneProgress: 0,
   globalProgress: 0,
-});
+  isHoldMode: false,
+  isHolding: false,
+};
+
+const ScrollContext = createContext<ScrollState>(initialState);
 
 export const useScrollState = () => useContext(ScrollContext);
 
-export function ScrollController({ children }: { children: ReactNode }) {
+function stateFromGlobalProgress(progress: number) {
+  const clamped = Math.min(1, Math.max(0, progress));
+  if (clamped < approachShare) {
+    return {
+      activeSceneId: JOURNEY_SCENES[0].id,
+      activeSceneIndex: JOURNEY_SCENES[0].index,
+      sceneProgress: clamped / approachShare,
+      globalProgress: clamped,
+    };
+  }
+  return {
+    activeSceneId: JOURNEY_SCENES[1].id,
+    activeSceneIndex: JOURNEY_SCENES[1].index,
+    sceneProgress: (clamped - approachShare) / (1 - approachShare),
+    globalProgress: clamped,
+  };
+}
+
+export function ScrollController({
+  children,
+  interactionEnabled = false,
+}: {
+  children: ReactNode;
+  interactionEnabled?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [state, setState] = useState<ScrollState>({
-    activeSceneId: SCENES[0].id,
-    activeSceneIndex: 1,
-    sceneProgress: 0,
-    globalProgress: 0,
-  });
+  const holdProgress = useRef(0);
+  const holding = useRef(false);
+  const [isHoldMode, setIsHoldMode] = useState(false);
+  const [state, setState] = useState<ScrollState>(initialState);
+
+  const updateProgress = useCallback((progress: number) => {
+    holdProgress.current = Math.min(1, Math.max(0, progress));
+    const next = stateFromGlobalProgress(holdProgress.current);
+    setState((previous) => ({
+      ...previous,
+      ...next,
+      isHoldMode,
+      isHolding: holding.current,
+    }));
+  }, [isHoldMode]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const query = window.matchMedia("(max-width: 700px) and (pointer: coarse)");
+    const sync = () => setIsHoldMode(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    setState((previous) => ({ ...previous, isHoldMode }));
+    document.documentElement.classList.toggle("mobile-hold-experience", isHoldMode && interactionEnabled);
+    if (isHoldMode && interactionEnabled) window.scrollTo({ top: 0, behavior: "instant" });
+    return () => document.documentElement.classList.remove("mobile-hold-experience");
+  }, [interactionEnabled, isHoldMode]);
+
+  useEffect(() => {
+    if (isHoldMode) return;
+
     const gsap = require("gsap").gsap;
     const ScrollTrigger = require("gsap/ScrollTrigger").ScrollTrigger;
+    gsap.registerPlugin(ScrollTrigger);
 
-    const triggers: any[] = [];
-    const sectionEls = Array.from(
+    const triggers: Array<{ kill: () => void }> = [];
+    const sectionElements = Array.from(
       document.querySelectorAll<HTMLElement>("[data-scene-section]")
     );
 
-    sectionEls.forEach((el, i) => {
-      const scene = SCENES[i];
-      const trigger = ScrollTrigger.create({
-        trigger: el,
-        start: "top top",
-        end: "bottom bottom",
-        onUpdate: (self: any) => {
-          setState((prev) => ({
-            ...prev,
-            activeSceneId: scene.id,
-            activeSceneIndex: scene.index,
-            sceneProgress: self.progress,
-          }));
-        },
-        onToggle: (self: any) => {
-          if (self.isActive) {
-            setState((prev) => ({
-              ...prev,
+    sectionElements.forEach((element, index) => {
+      const scene = JOURNEY_SCENES[index];
+      if (!scene) return;
+      triggers.push(
+        ScrollTrigger.create({
+          trigger: element,
+          start: "top top",
+          end: "bottom bottom",
+          onUpdate: (self: { progress: number }) => {
+            setState((previous) => ({
+              ...previous,
+              activeSceneId: scene.id,
+              activeSceneIndex: scene.index,
+              sceneProgress: self.progress,
+            }));
+          },
+          onToggle: (self: { isActive: boolean }) => {
+            if (!self.isActive) return;
+            setState((previous) => ({
+              ...previous,
               activeSceneId: scene.id,
               activeSceneIndex: scene.index,
             }));
-          }
+          },
+        })
+      );
+    });
+
+    triggers.push(
+      ScrollTrigger.create({
+        trigger: containerRef.current,
+        start: "top top",
+        end: "bottom bottom",
+        onUpdate: (self: { progress: number }) => {
+          holdProgress.current = self.progress;
+          setState((previous) => ({ ...previous, globalProgress: self.progress }));
         },
-      });
-      triggers.push(trigger);
-    });
+      })
+    );
 
-    // Global progress across the whole page, used for scene preload/dispose.
-    const globalTrigger = ScrollTrigger.create({
-      trigger: containerRef.current,
-      start: "top top",
-      end: "bottom bottom",
-      onUpdate: (self: any) => {
-        setState((prev) => ({ ...prev, globalProgress: self.progress }));
-      },
-    });
-    triggers.push(globalTrigger);
+    ScrollTrigger.refresh();
+    return () => triggers.forEach((trigger) => trigger.kill());
+  }, [isHoldMode]);
 
-    return () => {
-      triggers.forEach((t) => t.kill());
+  useEffect(() => {
+    if (!isHoldMode || !interactionEnabled) return;
+    let frame = 0;
+    let previousTime = performance.now();
+
+    const advance = (time: number) => {
+      const delta = Math.min(48, time - previousTime);
+      previousTime = time;
+      if (holding.current && holdProgress.current < 1) {
+        const nextProgress = Math.min(1, holdProgress.current + (delta / 1000) * 0.05);
+        if (nextProgress >= 1) holding.current = false;
+        updateProgress(nextProgress);
+      }
+      frame = requestAnimationFrame(advance);
     };
-  }, []);
+
+    frame = requestAnimationFrame(advance);
+    return () => cancelAnimationFrame(frame);
+  }, [interactionEnabled, isHoldMode, updateProgress]);
+
+  const startHolding = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isHoldMode || !interactionEnabled || holdProgress.current >= 1) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    holding.current = true;
+    setState((previous) => ({ ...previous, isHolding: true }));
+  };
+
+  const stopHolding = (event?: ReactPointerEvent<HTMLDivElement>) => {
+    if (!holding.current) return;
+    if (event?.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    holding.current = false;
+    setState((previous) => ({ ...previous, isHolding: false }));
+  };
+
+  const contextValue = useMemo(
+    () => ({ ...state, isHoldMode, isHolding: state.isHolding }),
+    [isHoldMode, state]
+  );
 
   return (
-    <div ref={containerRef} id="scroll-root">
-      <ScrollContext.Provider value={state}>{children}</ScrollContext.Provider>
+    <div
+      ref={containerRef}
+      id="scroll-root"
+      className={isHoldMode ? "hold-mode" : undefined}
+      onPointerDown={startHolding}
+      onPointerUp={stopHolding}
+      onPointerCancel={stopHolding}
+      onLostPointerCapture={stopHolding}
+      onContextMenu={(event) => {
+        if (isHoldMode && interactionEnabled) event.preventDefault();
+      }}
+    >
+      <ScrollContext.Provider value={contextValue}>{children}</ScrollContext.Provider>
     </div>
   );
 }

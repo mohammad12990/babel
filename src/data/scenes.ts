@@ -75,7 +75,7 @@ export const SCENES: SceneDefinition[] = [
       { progress: 0.82, position: [0.25, 5.35, -7.8], lookAt: [0, 10.8, -20], fov: 45 },
       { progress: 1, position: [0, 5.25, -12.7], lookAt: [0, 7.6, -20], fov: 47 },
     ],
-    onScreenText: [{ at: 0.02, until: 0.22, heading: "02 / 08 — THE ISHTAR GATE" }],
+    onScreenText: [],
     hotspotIds: ["glazed-bricks", "gate-lions", "gate-bulls", "gate-dragons"],
     ambienceTrack: "gate_threshold",
     transitionOut: "threshold",

@@ -10,16 +10,14 @@
 //   3. The persistent UI chrome (chapter nav, text overlay, badges).
 
 import { Canvas } from "@react-three/fiber";
-import { useState } from "react";
+import { Suspense, useState, type CSSProperties } from "react";
 import * as THREE from "three";
-import { ScrollController } from "@/components/ScrollController";
+import { ScrollController, useScrollState } from "@/components/ScrollController";
 import { CameraRig } from "@/components/CameraRig";
 import { ChapterNavigation } from "@/components/ChapterNavigation";
 import { SceneTextOverlay } from "@/components/SceneTextOverlay";
 import { AudioManager } from "@/components/AudioManager";
-import { TransitionOverlay } from "@/components/TransitionOverlay";
-import { CinematicBackdrop } from "@/components/CinematicBackdrop";
-import { AtmosphericDust } from "@/components/world/WorldKit";
+import { BabylonJourneyScene } from "@/components/scenes/BabylonJourneyScene";
 import { SCENES } from "@/data/scenes";
 
 function ScrollTrack() {
@@ -59,29 +57,63 @@ function IntroGate({ onBegin }: { onBegin: () => void }) {
   );
 }
 
+function InteractionCue() {
+  const { isHoldMode, isHolding, globalProgress } = useScrollState();
+
+  if (isHoldMode) {
+    return (
+      <div className={"hold-cue" + (isHolding ? " hold-cue-active" : "")} aria-hidden="true">
+        <span className="hold-cue-ring" style={{ "--hold-progress": globalProgress } as CSSProperties} />
+        <span>{isHolding ? "MOVING FORWARD" : "HOLD TO MOVE"}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="scroll-cue" aria-hidden="true">
+      <span>SCROLL TO APPROACH</span>
+      <i />
+    </div>
+  );
+}
+
+function ArrivalMoment() {
+  const { activeSceneIndex, sceneProgress } = useScrollState();
+  if (activeSceneIndex !== 2 || sceneProgress < 0.82) return null;
+  const opacity = Math.min(1, (sceneProgress - 0.82) / 0.12);
+  return (
+    <div className="milestone-end" style={{ opacity }}>
+      <span>THE GATE AWAITS</span>
+      <small>03 / 08 — THE THRESHOLD</small>
+    </div>
+  );
+}
+
 export function Experience() {
   const [started, setStarted] = useState(false);
 
   return (
-    <ScrollController>
+    <ScrollController interactionEnabled={started}>
       {!started && <IntroGate onBegin={() => setStarted(true)} />}
-
-      <CinematicBackdrop />
 
       <div className="canvas-layer" aria-hidden={!started}>
         <Canvas
-          camera={{ position: [0, 4, 40], fov: 42, near: 0.1, far: 1000 }}
-          gl={{ antialias: true, powerPreference: "high-performance", alpha: true }}
+          shadows
+          camera={{ position: [0, 4.4, 82], fov: 44, near: 0.1, far: 600 }}
+          gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
           dpr={[1, 1.65]}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
-            gl.toneMappingExposure = 1.08;
+            gl.toneMappingExposure = 1.14;
             gl.outputColorSpace = THREE.SRGBColorSpace;
-            gl.setClearColor(0x000000, 0);
+            gl.shadowMap.type = THREE.PCFSoftShadowMap;
+            gl.setClearColor(0x98725d, 1);
           }}
         >
-          <CameraRig />
-          <AtmosphericDust count={190} spread={[48, 22, 100]} position={[0, 2, 2]} />
+          <Suspense fallback={null}>
+            <BabylonJourneyScene />
+            <CameraRig />
+          </Suspense>
         </Canvas>
       </div>
 
@@ -93,14 +125,11 @@ export function Experience() {
             <span className="experience-brand">ENTER BABYLON</span>
             <span className="experience-era">605–562 BCE</span>
           </header>
-          <div className="scroll-cue" aria-hidden="true">
-            <span>SCROLL TO APPROACH</span>
-            <i />
-          </div>
+          <InteractionCue />
           <ChapterNavigation />
           <SceneTextOverlay />
+          <ArrivalMoment />
           <AudioManager />
-          <TransitionOverlay />
         </>
       )}
 

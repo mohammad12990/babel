@@ -127,6 +127,27 @@ body {
   position: relative;
 }
 
+html.mobile-hold-experience,
+html.mobile-hold-experience body {
+  height: 100%;
+  overflow: hidden;
+}
+
+#scroll-root.hold-mode {
+  width: 100%;
+  height: 100dvh;
+  min-height: 100svh;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+#scroll-root.hold-mode .scroll-track {
+  display: none;
+}
+
 /* ---------- Intro gate ---------- */
 
 .intro-gate {
@@ -311,6 +332,44 @@ body {
   height: 100%;
   background: var(--color-gold);
   animation: scroll-cue 2.1s ease-in-out infinite;
+}
+
+.hold-cue {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 15;
+  display: none;
+  align-items: center;
+  gap: 0.62rem;
+  color: rgba(240, 229, 202, 0.78);
+  font-size: 0.58rem;
+  letter-spacing: 0.15em;
+  pointer-events: none;
+  transition: color 180ms ease, transform 180ms ease;
+}
+
+.hold-cue-ring {
+  --hold-progress: 0;
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--color-gold) calc(var(--hold-progress) * 1turn),
+    rgba(232, 223, 200, 0.2) 0
+  );
+  mask: radial-gradient(circle, transparent 54%, #000 57%);
+  -webkit-mask: radial-gradient(circle, transparent 54%, #000 57%);
+}
+
+.hold-cue-active {
+  color: var(--color-gold);
+  transform: scale(0.97);
+}
+
+.hold-cue-active .hold-cue-ring {
+  filter: drop-shadow(0 0 8px rgba(201, 162, 39, 0.48));
 }
 
 @keyframes scroll-cue {
@@ -547,4 +606,4 @@ body {
 
 /* ---------- Cinematic transition veil ---------- */
 .transition-overlay{position:fixed;inset:0;z-index:11;pointer-events:none;background:radial-gradient(circle at 50% 44%,rgba(63,46,29,.18),rgba(8,7,6,.98));transition:opacity 80ms linear}
-@media (max-width:700px){.cinematic-backdrop-approach .cinematic-backdrop-image{object-position:50% 50%}.cinematic-backdrop-ishtar-gate .cinematic-backdrop-image{object-position:50% 52%}.experience-header{padding:1rem}.experience-era{display:none}.chapter-nav{left:1rem;bottom:1rem}.scene-text-overlay{left:1rem;right:1rem;bottom:4.75rem}.scroll-cue{right:1rem;bottom:1rem}.scroll-cue span{display:none}.cinematic-vignette{box-shadow:inset 0 0 90px 22px rgba(8,7,5,.58)}.milestone-end{bottom:13%}.hotspot-card{width:min(220px,72vw)}.past-present-slider input[type="range"]{width:110px}}
+@media (max-width:700px){.experience-header{padding:1rem}.experience-era{display:none}.chapter-nav{left:1rem;bottom:1rem}.scene-text-overlay{left:1rem;right:1rem;bottom:4.75rem}.scroll-cue{right:1rem;bottom:1rem}.scroll-cue span{display:none}.hold-cue{display:flex}.cinematic-vignette{box-shadow:inset 0 0 90px 22px rgba(8,7,5,.58)}.milestone-end{bottom:13%}.hotspot-card{width:min(220px,72vw)}.past-present-slider input[type="range"]{width:110px}}
