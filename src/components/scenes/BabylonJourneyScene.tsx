@@ -6,33 +6,85 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useScrollState } from "@/components/ScrollController";
 
+export const RIVER_X = -40;
+export const ROAD_X = 20;
+export const GATE_Z = -116;
+
+type BabylonMaterials = {
+  blue: THREE.MeshPhysicalMaterial;
+  blueDark: THREE.MeshPhysicalMaterial;
+  mud: THREE.MeshStandardMaterial;
+  mudDark: THREE.MeshStandardMaterial;
+  stone: THREE.MeshStandardMaterial;
+  gold: THREE.MeshPhysicalMaterial;
+  ivory: THREE.MeshPhysicalMaterial;
+  wood: THREE.MeshStandardMaterial;
+  bronze: THREE.MeshStandardMaterial;
+};
+
 const seeded = (seed: number) => {
   const value = Math.sin(seed * 917.37) * 43758.5453;
   return value - Math.floor(value);
 };
 
-function makeBankGeometry(side: -1 | 1) {
-  const segments = 84;
-  const columns = 4;
+const riverCenterAt = (z: number) => RIVER_X + Math.sin((z + 22) * 0.018) * 1.55;
+
+function makeRiverGeometry() {
+  const rows = 150;
+  const columns = 12;
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
 
-  for (let zIndex = 0; zIndex <= segments; zIndex += 1) {
-    const t = zIndex / segments;
-    const z = THREE.MathUtils.lerp(108, -118, t);
-    const irregularity = Math.sin(t * 31) * 0.55 + Math.sin(t * 71) * 0.18;
-    const riverEdge = 9.6 + irregularity;
-    const widths = [riverEdge, riverEdge + 4.2, 27, 52];
-    const heights = [-0.22, 0.35 + irregularity * 0.18, 1.1, 2.15 + Math.sin(t * 17) * 0.22];
-
-    for (let column = 0; column < columns; column += 1) {
-      positions.push(widths[column] * side, heights[column], z);
-      uvs.push(column / (columns - 1) * 4, t * 16);
+  for (let row = 0; row <= rows; row += 1) {
+    const t = row / rows;
+    const z = THREE.MathUtils.lerp(132, -176, t);
+    const center = riverCenterAt(z);
+    for (let column = 0; column <= columns; column += 1) {
+      const across = column / columns;
+      positions.push(center + THREE.MathUtils.lerp(-12.5, 12.5, across), -0.2, z);
+      uvs.push(across, t * 9);
     }
   }
 
-  for (let row = 0; row < segments; row += 1) {
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const a = row * (columns + 1) + column;
+      const b = a + columns + 1;
+      indices.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function makeBankGeometry(side: -1 | 1) {
+  const rows = 112;
+  const columns = 6;
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  for (let row = 0; row <= rows; row += 1) {
+    const t = row / rows;
+    const z = THREE.MathUtils.lerp(135, -180, t);
+    const center = riverCenterAt(z);
+    const rough = Math.sin(t * 37) * 0.38 + Math.sin(t * 91) * 0.14;
+    const riverEdge = 12.25 + rough;
+    const offsets = [riverEdge, riverEdge + 2.5, riverEdge + 7, riverEdge + 17, riverEdge + 36, riverEdge + 82];
+    const heights = [-0.2, 0.18, 0.68, 1.03, 1.18, 1.3];
+    for (let column = 0; column < columns; column += 1) {
+      positions.push(center + offsets[column] * side, heights[column] + rough * 0.09, z);
+      uvs.push((column / (columns - 1)) * 7, t * 24);
+    }
+  }
+
+  for (let row = 0; row < rows; row += 1) {
     for (let column = 0; column < columns - 1; column += 1) {
       const a = row * columns + column;
       const b = a + columns;
@@ -49,19 +101,20 @@ function makeBankGeometry(side: -1 | 1) {
   return geometry;
 }
 
-function makeFrondGeometry() {
-  const segments = 9;
+function makeRibbonGeometry(points: THREE.Vector3[], width: number, segments = 72) {
+  const curve = new THREE.CatmullRomCurve3(points, false, "centripetal", 0.3);
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
 
   for (let index = 0; index <= segments; index += 1) {
     const t = index / segments;
-    const x = t * 4.6;
-    const y = Math.sin(t * Math.PI) * 0.42 - Math.pow(t, 1.65) * 1.5;
-    const width = THREE.MathUtils.lerp(0.33, 0.025, t);
-    positions.push(x, y, -width, x, y, width);
-    uvs.push(t, 0, t, 1);
+    const point = curve.getPointAt(t);
+    const tangent = curve.getTangentAt(t).normalize();
+    const side = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize().multiplyScalar(width / 2);
+    positions.push(point.x - side.x, point.y, point.z - side.z);
+    positions.push(point.x + side.x, point.y, point.z + side.z);
+    uvs.push(0, t * 8, 1, t * 8);
     if (index < segments) {
       const a = index * 2;
       indices.push(a, a + 2, a + 1, a + 2, a + 3, a + 1);
@@ -76,50 +129,124 @@ function makeFrondGeometry() {
   return geometry;
 }
 
-function River() {
-  const material = useRef<THREE.ShaderMaterial>(null);
+function makeFrondGeometry() {
+  const segments = 11;
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  for (let index = 0; index <= segments; index += 1) {
+    const t = index / segments;
+    const x = t * 4.8;
+    const y = Math.sin(t * Math.PI) * 0.46 - Math.pow(t, 1.55) * 1.58;
+    const width = THREE.MathUtils.lerp(0.36, 0.018, t);
+    positions.push(x, y, -width, x, y, width);
+    uvs.push(t, 0, t, 1);
+    if (index < segments) {
+      const a = index * 2;
+      indices.push(a, a + 2, a + 1, a + 2, a + 3, a + 1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
 
+function makeAnimalReliefGeometry() {
+  const shape = new THREE.Shape();
+  shape.moveTo(-1.28, 0.08);
+  shape.bezierCurveTo(-1.08, 0.54, -0.5, 0.68, 0.18, 0.6);
+  shape.lineTo(0.64, 0.52);
+  shape.lineTo(0.83, 0.86);
+  shape.lineTo(1.1, 0.95);
+  shape.lineTo(1.25, 0.76);
+  shape.lineTo(1.1, 0.55);
+  shape.lineTo(0.84, 0.43);
+  shape.lineTo(0.62, 0.02);
+  shape.lineTo(0.7, -0.62);
+  shape.lineTo(0.39, -0.62);
+  shape.lineTo(0.17, -0.05);
+  shape.lineTo(-0.46, -0.05);
+  shape.lineTo(-0.68, -0.62);
+  shape.lineTo(-1, -0.62);
+  shape.lineTo(-0.9, -0.02);
+  shape.bezierCurveTo(-1.18, 0.04, -1.38, 0.34, -1.48, 0.62);
+  shape.lineTo(-1.6, 0.55);
+  shape.bezierCurveTo(-1.55, 0.27, -1.43, 0.13, -1.28, 0.08);
+  shape.closePath();
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.12,
+    bevelEnabled: true,
+    bevelSize: 0.035,
+    bevelThickness: 0.04,
+    bevelSegments: 2,
+    curveSegments: 5,
+  });
+  geometry.center();
+  return geometry;
+}
+
+function River() {
+  const geometry = useMemo(() => makeRiverGeometry(), []);
+  const material = useRef<THREE.ShaderMaterial>(null);
+  useEffect(() => () => geometry.dispose(), [geometry]);
   useFrame(({ clock }) => {
     if (material.current) material.current.uniforms.uTime.value = clock.elapsedTime;
   });
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.12, 4]} receiveShadow>
-      <planeGeometry args={[20.5, 220, 42, 180]} />
+    <mesh geometry={geometry} receiveShadow>
       <shaderMaterial
         ref={material}
         transparent
         depthWrite
         uniforms={{
           uTime: { value: 0 },
-          uDeep: { value: new THREE.Color("#123a4d") },
-          uLight: { value: new THREE.Color("#a56f49") },
+          uDeep: { value: new THREE.Color("#153f52") },
+          uShallow: { value: new THREE.Color("#4d7b79") },
+          uSun: { value: new THREE.Color("#f1bb72") },
         }}
         vertexShader={`
           uniform float uTime;
-          varying float vWave;
           varying vec2 vUv;
+          varying vec3 vWorld;
+          varying vec3 vWaveNormal;
           void main() {
             vUv = uv;
             vec3 p = position;
-            float wave = sin(p.y * 0.34 + uTime * 0.72) * 0.09;
-            wave += sin(p.x * 1.18 - p.y * 0.12 - uTime * 0.48) * 0.035;
-            p.z += wave;
-            vWave = wave;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+            float phaseA = p.z * 0.31 + uTime * 0.72;
+            float phaseB = p.x * 0.73 - p.z * 0.13 - uTime * 0.48;
+            float phaseC = p.z * 0.82 + p.x * 0.24 + uTime * 0.31;
+            float wave = sin(phaseA) * 0.11 + sin(phaseB) * 0.045 + sin(phaseC) * 0.025;
+            p.y += wave;
+            float dx = cos(phaseB) * 0.045 * 0.73 + cos(phaseC) * 0.025 * 0.24;
+            float dz = cos(phaseA) * 0.11 * 0.31 - cos(phaseB) * 0.045 * 0.13 + cos(phaseC) * 0.025 * 0.82;
+            vWaveNormal = normalize(mat3(modelMatrix) * vec3(-dx, 1.0, -dz));
+            vec4 world = modelMatrix * vec4(p, 1.0);
+            vWorld = world.xyz;
+            gl_Position = projectionMatrix * viewMatrix * world;
           }
         `}
         fragmentShader={`
           uniform float uTime;
           uniform vec3 uDeep;
-          uniform vec3 uLight;
-          varying float vWave;
+          uniform vec3 uShallow;
+          uniform vec3 uSun;
           varying vec2 vUv;
+          varying vec3 vWorld;
+          varying vec3 vWaveNormal;
           void main() {
-            float shimmer = pow(max(0.0, sin(vUv.y * 430.0 + uTime * 1.5) * 0.5 + 0.5), 13.0);
-            shimmer *= 0.13 + smoothstep(0.1, 0.9, vUv.x) * 0.08;
-            vec3 color = mix(uDeep, uLight, 0.2 + vWave * 1.8 + shimmer);
-            gl_FragColor = vec4(color, 0.96);
+            vec3 viewDir = normalize(cameraPosition - vWorld);
+            float fresnel = pow(1.0 - max(dot(viewDir, normalize(vWaveNormal)), 0.0), 2.5);
+            float ripples = sin(vUv.y * 290.0 + uTime * 2.0 + sin(vUv.x * 34.0) * 2.2);
+            float glint = pow(max(ripples * 0.5 + 0.5, 0.0), 18.0) * 0.22;
+            float bankLight = smoothstep(0.02, 0.34, min(vUv.x, 1.0 - vUv.x));
+            vec3 color = mix(uShallow, uDeep, bankLight * 0.78);
+            color = mix(color, vec3(0.48, 0.65, 0.68), fresnel * 0.38);
+            color += uSun * glint * (0.35 + fresnel);
+            gl_FragColor = vec4(color, 0.985);
           }
         `}
       />
@@ -128,88 +255,77 @@ function River() {
 }
 
 function RiverBanks({ material }: { material: THREE.Material }) {
-  const left = useMemo(() => makeBankGeometry(-1), []);
-  const right = useMemo(() => makeBankGeometry(1), []);
-
+  const west = useMemo(() => makeBankGeometry(-1), []);
+  const east = useMemo(() => makeBankGeometry(1), []);
   useEffect(() => () => {
-    left.dispose();
-    right.dispose();
-  }, [left, right]);
-
+    west.dispose();
+    east.dispose();
+  }, [east, west]);
   return (
     <group>
-      <mesh geometry={left} material={material} receiveShadow />
-      <mesh geometry={right} material={material} receiveShadow />
+      <mesh geometry={west} material={material} receiveShadow />
+      <mesh geometry={east} material={material} receiveShadow />
     </group>
   );
 }
 
 function PalmGrove() {
-  const palmCount = 26;
-  const leavesPerPalm = 10;
+  const palmCount = 42;
+  const leavesPerPalm = 11;
   const trunks = useRef<THREE.InstancedMesh>(null);
   const crowns = useRef<THREE.InstancedMesh>(null);
   const fronds = useRef<THREE.InstancedMesh>(null);
   const frondGeometry = useMemo(() => makeFrondGeometry(), []);
   const palms = useMemo(
-    () =>
-      Array.from({ length: palmCount }, (_, index) => {
-        const side = index % 2 === 0 ? -1 : 1;
-        const z = 91 - seeded(index + 28) * 171;
-        return {
-          x: side * (12.8 + seeded(index + 81) * 18),
-          z,
-          height: 0.76 + seeded(index + 177) * 0.58,
-          twist: seeded(index + 251) * Math.PI * 2,
-          lean: (seeded(index + 349) - 0.5) * 0.09,
-        };
-      }),
+    () => Array.from({ length: palmCount }, (_, index) => {
+      const side = index % 2 === 0 ? -1 : 1;
+      const z = 118 - seeded(index + 28) * 272;
+      const eastRouteGap = side === 1 && z < 44 && z > -22;
+      return {
+        x: riverCenterAt(z) + side * (16 + seeded(index + 81) * (eastRouteGap ? 9 : 20)),
+        z,
+        height: 0.72 + seeded(index + 177) * 0.66,
+        twist: seeded(index + 251) * Math.PI * 2,
+        lean: (seeded(index + 349) - 0.5) * 0.1,
+      };
+    }),
     []
   );
 
   useLayoutEffect(() => {
     const dummy = new THREE.Object3D();
     palms.forEach((palm, palmIndex) => {
-      const trunkHeight = 7.4 * palm.height;
+      const trunkHeight = 7.8 * palm.height;
       if (trunks.current) {
         dummy.position.set(palm.x, trunkHeight / 2, palm.z);
         dummy.rotation.set(palm.lean, palm.twist, -palm.lean * 0.55);
         dummy.scale.set(palm.height, palm.height, palm.height);
         dummy.updateMatrix();
         trunks.current.setMatrixAt(palmIndex, dummy.matrix);
-        trunks.current.setColorAt(
-          palmIndex,
-          new THREE.Color(palmIndex % 3 === 0 ? "#795038" : "#5a3827")
-        );
+        trunks.current.setColorAt(palmIndex, new THREE.Color(palmIndex % 3 === 0 ? "#7f553c" : "#533422"));
       }
-
       if (crowns.current) {
-        dummy.position.set(palm.x, trunkHeight + 0.1, palm.z);
+        dummy.position.set(palm.x, trunkHeight + 0.08, palm.z);
         dummy.rotation.set(0, palm.twist, 0);
         dummy.scale.setScalar(palm.height);
         dummy.updateMatrix();
         crowns.current.setMatrixAt(palmIndex, dummy.matrix);
       }
-
       for (let leafIndex = 0; leafIndex < leavesPerPalm; leafIndex += 1) {
         if (!fronds.current) continue;
         const instance = palmIndex * leavesPerPalm + leafIndex;
         dummy.position.set(palm.x, trunkHeight + 0.28, palm.z);
         dummy.rotation.set(
-          (seeded(instance + 477) - 0.5) * 0.16,
+          (seeded(instance + 477) - 0.5) * 0.2,
           palm.twist + (leafIndex / leavesPerPalm) * Math.PI * 2,
-          (seeded(instance + 581) - 0.5) * 0.18
+          (seeded(instance + 581) - 0.5) * 0.2
         );
         dummy.scale.setScalar(palm.height * (0.84 + seeded(instance + 644) * 0.28));
         dummy.updateMatrix();
         fronds.current.setMatrixAt(instance, dummy.matrix);
-        fronds.current.setColorAt(
-          instance,
-          new THREE.Color(instance % 4 === 0 ? "#55633a" : "#304735")
-        );
+        fronds.current.setColorAt(instance, new THREE.Color(instance % 4 === 0 ? "#657342" : "#314b35"));
       }
     });
-
     [trunks.current, crowns.current, fronds.current].forEach((mesh) => {
       if (!mesh) return;
       mesh.instanceMatrix.needsUpdate = true;
@@ -218,23 +334,18 @@ function PalmGrove() {
   }, [palms]);
 
   useEffect(() => () => frondGeometry.dispose(), [frondGeometry]);
-
   return (
     <group>
       <instancedMesh ref={trunks} args={[undefined, undefined, palmCount]} castShadow>
-        <cylinderGeometry args={[0.17, 0.33, 7.4, 9, 5]} />
-        <meshStandardMaterial vertexColors roughness={0.95} />
+        <cylinderGeometry args={[0.16, 0.34, 7.8, 10, 7]} />
+        <meshStandardMaterial vertexColors roughness={0.96} />
       </instancedMesh>
       <instancedMesh ref={crowns} args={[undefined, undefined, palmCount]} castShadow>
-        <sphereGeometry args={[0.55, 9, 7]} />
-        <meshStandardMaterial color="#42513a" roughness={0.94} />
+        <sphereGeometry args={[0.55, 10, 8]} />
+        <meshStandardMaterial color="#3c5238" roughness={0.95} />
       </instancedMesh>
-      <instancedMesh
-        ref={fronds}
-        args={[frondGeometry, undefined, palmCount * leavesPerPalm]}
-        castShadow
-      >
-        <meshStandardMaterial vertexColors roughness={0.9} side={THREE.DoubleSide} />
+      <instancedMesh ref={fronds} args={[frondGeometry, undefined, palmCount * leavesPerPalm]} castShadow>
+        <meshStandardMaterial vertexColors roughness={0.92} side={THREE.DoubleSide} />
       </instancedMesh>
     </group>
   );
@@ -243,29 +354,31 @@ function PalmGrove() {
 function ReedsAndStones() {
   const reeds = useRef<THREE.InstancedMesh>(null);
   const stones = useRef<THREE.InstancedMesh>(null);
-  const reedCount = 180;
-  const stoneCount = 62;
+  const reedCount = 250;
+  const stoneCount = 82;
 
   useLayoutEffect(() => {
     const dummy = new THREE.Object3D();
     for (let index = 0; index < reedCount; index += 1) {
       if (!reeds.current) break;
       const side = index % 2 === 0 ? -1 : 1;
-      const height = 0.65 + seeded(index + 31) * 1.3;
-      dummy.position.set(side * (9.5 + seeded(index + 73) * 2.8), height / 2, 96 - seeded(index + 122) * 190);
-      dummy.rotation.set(0, seeded(index + 178) * Math.PI, (seeded(index + 205) - 0.5) * 0.18);
+      const z = 125 - seeded(index + 122) * 290;
+      const height = 0.55 + seeded(index + 31) * 1.45;
+      dummy.position.set(riverCenterAt(z) + side * (12.4 + seeded(index + 73) * 3.2), height / 2, z);
+      dummy.rotation.set(0, seeded(index + 178) * Math.PI, (seeded(index + 205) - 0.5) * 0.2);
       dummy.scale.set(1, height, 1);
       dummy.updateMatrix();
       reeds.current.setMatrixAt(index, dummy.matrix);
-      reeds.current.setColorAt(index, new THREE.Color(index % 5 === 0 ? "#a38a4c" : "#617044"));
+      reeds.current.setColorAt(index, new THREE.Color(index % 5 === 0 ? "#b39851" : "#607044"));
     }
     for (let index = 0; index < stoneCount; index += 1) {
       if (!stones.current) break;
       const side = index % 2 === 0 ? -1 : 1;
-      const scale = 0.18 + seeded(index + 388) * 0.72;
-      dummy.position.set(side * (10.7 + seeded(index + 421) * 14), 0.05 + scale * 0.22, 93 - seeded(index + 466) * 192);
+      const z = 121 - seeded(index + 466) * 285;
+      const scale = 0.2 + seeded(index + 388) * 0.68;
+      dummy.position.set(riverCenterAt(z) + side * (13.2 + seeded(index + 421) * 8), scale * 0.3, z);
       dummy.rotation.set(seeded(index + 501), seeded(index + 543) * Math.PI, seeded(index + 577));
-      dummy.scale.set(scale * 1.4, scale * 0.7, scale);
+      dummy.scale.set(scale * 1.45, scale * 0.72, scale);
       dummy.updateMatrix();
       stones.current.setMatrixAt(index, dummy.matrix);
     }
@@ -279,12 +392,12 @@ function ReedsAndStones() {
   return (
     <group>
       <instancedMesh ref={reeds} args={[undefined, undefined, reedCount]} castShadow>
-        <cylinderGeometry args={[0.018, 0.035, 1, 5]} />
+        <cylinderGeometry args={[0.017, 0.036, 1, 5]} />
         <meshStandardMaterial vertexColors roughness={1} />
       </instancedMesh>
       <instancedMesh ref={stones} args={[undefined, undefined, stoneCount]} castShadow receiveShadow>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color="#78614c" roughness={1} />
+        <meshStandardMaterial color="#79634d" roughness={1} />
       </instancedMesh>
     </group>
   );
@@ -294,99 +407,294 @@ function RiverBoat({ position, scale = 1 }: { position: [number, number, number]
   const boat = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
     if (!boat.current) return;
-    boat.current.position.y = position[1] + Math.sin(clock.elapsedTime * 0.7 + position[2]) * 0.055;
-    boat.current.rotation.z = Math.sin(clock.elapsedTime * 0.48 + position[0]) * 0.018;
+    boat.current.position.y = position[1] + Math.sin(clock.elapsedTime * 0.66 + position[2]) * 0.055;
+    boat.current.rotation.z = Math.sin(clock.elapsedTime * 0.43 + position[0]) * 0.016;
   });
-
   return (
     <group ref={boat} position={position} scale={scale}>
-      <mesh scale={[1.2, 0.22, 2.8]} castShadow>
-        <sphereGeometry args={[1, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.62]} />
-        <meshStandardMaterial color="#3e2518" roughness={0.95} side={THREE.DoubleSide} />
+      <mesh scale={[1.22, 0.23, 2.95]} castShadow>
+        <sphereGeometry args={[1, 30, 14, 0, Math.PI * 2, 0, Math.PI * 0.61]} />
+        <meshStandardMaterial color="#3a2216" roughness={0.94} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[0, 1.35, 0]} castShadow>
-        <cylinderGeometry args={[0.035, 0.06, 2.8, 7]} />
-        <meshStandardMaterial color="#3a2518" roughness={1} />
+      <mesh position={[0, 1.36, 0]} castShadow>
+        <cylinderGeometry args={[0.035, 0.065, 2.85, 8]} />
+        <meshStandardMaterial color="#352117" roughness={1} />
       </mesh>
-      <mesh position={[0.42, 1.4, 0]} rotation={[0, 0, -0.12]} castShadow>
-        <planeGeometry args={[0.95, 2.15]} />
-        <meshStandardMaterial color="#cdb98e" roughness={0.92} side={THREE.DoubleSide} />
+      <mesh position={[0.44, 1.42, 0]} rotation={[0, 0, -0.13]} castShadow>
+        <planeGeometry args={[0.98, 2.2, 2, 2]} />
+        <meshStandardMaterial color="#d2c098" roughness={0.9} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );
 }
 
-function makeAnimalReliefGeometry() {
-  const shape = new THREE.Shape();
-  shape.moveTo(-1.05, 0.12);
-  shape.lineTo(-0.8, 0.52);
-  shape.lineTo(-0.18, 0.64);
-  shape.lineTo(0.42, 0.58);
-  shape.lineTo(0.73, 0.9);
-  shape.lineTo(1.04, 0.84);
-  shape.lineTo(1.18, 0.63);
-  shape.lineTo(0.83, 0.45);
-  shape.lineTo(0.65, 0.12);
-  shape.lineTo(0.68, -0.55);
-  shape.lineTo(0.43, -0.55);
-  shape.lineTo(0.25, 0.02);
-  shape.lineTo(-0.45, 0.02);
-  shape.lineTo(-0.62, -0.55);
-  shape.lineTo(-0.87, -0.55);
-  shape.lineTo(-0.8, 0.02);
-  shape.closePath();
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.13,
-    bevelEnabled: true,
-    bevelSize: 0.035,
-    bevelThickness: 0.035,
-    bevelSegments: 1,
-  });
-  geometry.center();
-  return geometry;
+function CityDistrict({ material }: { material: THREE.Material }) {
+  const buildings = useMemo(() => Array.from({ length: 78 }, (_, index) => {
+    const zone = index % 3;
+    const z = 116 - seeded(index + 113) * 300;
+    const height = 3.8 + seeded(index + 29) * 9.2;
+    let x: number;
+    if (zone === 0) x = -72 - seeded(index + 71) * 40;
+    else if (zone === 1) x = 46 + seeded(index + 181) * 70;
+    else x = 48 + seeded(index + 203) * 36;
+    return {
+      x,
+      y: 1.25 + height / 2,
+      z,
+      sx: 4.8 + seeded(index + 227) * 8.2,
+      sy: height,
+      sz: 5 + seeded(index + 269) * 9,
+      rotation: (seeded(index + 301) - 0.5) * 0.12,
+    };
+  }), []);
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const dummy = new THREE.Object3D();
+    buildings.forEach((building, index) => {
+      if (!mesh.current) return;
+      dummy.position.set(building.x, building.y, building.z);
+      dummy.rotation.set(0, building.rotation, 0);
+      dummy.scale.set(building.sx, building.sy, building.sz);
+      dummy.updateMatrix();
+      mesh.current.setMatrixAt(index, dummy.matrix);
+      mesh.current.setColorAt(index, new THREE.Color(index % 4 === 0 ? "#8d6548" : "#aa7954"));
+    });
+    if (mesh.current) {
+      mesh.current.instanceMatrix.needsUpdate = true;
+      if (mesh.current.instanceColor) mesh.current.instanceColor.needsUpdate = true;
+    }
+  }, [buildings]);
+  return (
+    <instancedMesh ref={mesh} args={[undefined, undefined, buildings.length]} material={material} castShadow receiveShadow>
+      <boxGeometry args={[1, 1, 1]} />
+    </instancedMesh>
+  );
 }
 
-function MerlonRow({
-  width,
-  depth,
-  y,
-  material,
-}: {
-  width: number;
-  depth: number;
-  y: number;
-  material: THREE.Material;
-}) {
-  const count = Math.floor(width / 1.55);
+function CitadelAndPalaces({ materials }: { materials: BabylonMaterials }) {
+  const towers = [-29, -19, -9, 1, 11];
+  const blocks: Array<[number, number, number, number, number, number]> = [
+    [-20, 8.2, -42, 14, 14, 24],
+    [-1, 7.2, -43, 17, 12, 22],
+    [9, 6.1, -71, 11, 10, 20],
+    [-19, 5.8, -79, 15, 9, 16],
+  ];
   return (
     <group>
-      {Array.from({ length: count }, (_, index) => (
-        <group key={index} position={[-width / 2 + 0.78 + index * 1.55, y, 0]}>
-          <mesh castShadow>
-            <boxGeometry args={[0.88, 1.25, depth]} />
-            <primitive object={material} attach="material" />
+      <mesh position={[-8, 5.4, -52]} castShadow receiveShadow>
+        <boxGeometry args={[43, 10.8, 76, 2, 2, 4]} />
+        <primitive object={materials.mud} attach="material" />
+      </mesh>
+      <mesh position={[-8, 6.35, -10.5]} castShadow receiveShadow>
+        <boxGeometry args={[44, 12.7, 7]} />
+        <primitive object={materials.mudDark} attach="material" />
+      </mesh>
+      {towers.map((x, index) => (
+        <group key={x} position={[x, 0, -10.5]}>
+          <mesh position={[0, 7.4, 0]} castShadow receiveShadow>
+            <boxGeometry args={[6.5, 14.8, 9]} />
+            <primitive object={materials.mud} attach="material" />
           </mesh>
-          <mesh position={[0, 0.92, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-            <boxGeometry args={[0.64, 0.64, depth * 0.72]} />
-            <primitive object={material} attach="material" />
+          <mesh position={[0, 15.3, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+            <boxGeometry args={[4.5, 1.15, 4.5]} />
+            <primitive object={materials.mudDark} attach="material" />
+          </mesh>
+          {index % 2 === 0 && (
+            <mesh position={[0, 7.2, 4.56]}>
+              <boxGeometry args={[1.25, 2.4, 0.16]} />
+              <primitive object={materials.wood} attach="material" />
+            </mesh>
+          )}
+        </group>
+      ))}
+      {blocks.map(([x, y, z, sx, sy, sz], index) => (
+        <mesh key={index} position={[x, y, z]} castShadow receiveShadow>
+          <boxGeometry args={[sx, sy, sz]} />
+          <primitive object={index % 2 ? materials.mudDark : materials.mud} attach="material" />
+        </mesh>
+      ))}
+      <mesh position={[-8, 11.35, -49]} castShadow>
+        <boxGeometry args={[41, 0.55, 69]} />
+        <primitive object={materials.mudDark} attach="material" />
+      </mesh>
+    </group>
+  );
+}
+
+function AccessRoute({ material }: { material: THREE.Material }) {
+  const geometry = useMemo(() => makeRibbonGeometry([
+    new THREE.Vector3(-27, 1.22, 39),
+    new THREE.Vector3(-22, 1.25, 31),
+    new THREE.Vector3(-10, 1.28, 24),
+    new THREE.Vector3(5, 1.3, 19),
+    new THREE.Vector3(ROAD_X, 1.32, 12),
+  ], 8.4), []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return <mesh geometry={geometry} material={material} receiveShadow />;
+}
+
+function DefensiveCanal() {
+  const geometry = useMemo(() => makeRibbonGeometry([
+    new THREE.Vector3(-29, 0.1, -3),
+    new THREE.Vector3(-21, 0.08, -5),
+    new THREE.Vector3(-12, 0.08, -6),
+    new THREE.Vector3(-2, 0.08, -6),
+  ], 6.2, 38), []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <mesh geometry={geometry} receiveShadow>
+      <meshPhysicalMaterial color="#315f68" roughness={0.2} metalness={0.05} clearcoat={0.7} clearcoatRoughness={0.15} />
+    </mesh>
+  );
+}
+
+function MerlonRow({ width, depth, y, material }: { width: number; depth: number; y: number; material: THREE.Material }) {
+  const count = Math.floor(width / 1.45);
+  const bases = useRef<THREE.InstancedMesh>(null);
+  const caps = useRef<THREE.InstancedMesh>(null);
+
+  useLayoutEffect(() => {
+    const dummy = new THREE.Object3D();
+    for (let index = 0; index < count; index += 1) {
+      const x = -width / 2 + 0.72 + index * 1.45;
+      if (bases.current) {
+        dummy.position.set(x, y, 0);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        bases.current.setMatrixAt(index, dummy.matrix);
+      }
+      if (caps.current) {
+        dummy.position.set(x, y + 0.83, 0);
+        dummy.rotation.set(0, Math.PI / 4, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        caps.current.setMatrixAt(index, dummy.matrix);
+      }
+    }
+    [bases.current, caps.current].forEach((mesh) => {
+      if (mesh) mesh.instanceMatrix.needsUpdate = true;
+    });
+  }, [count, width, y]);
+
+  return (
+    <group>
+      <instancedMesh ref={bases} args={[undefined, material, count]} castShadow>
+        <boxGeometry args={[0.84, 1.15, depth]} />
+      </instancedMesh>
+      <instancedMesh ref={caps} args={[undefined, material, count]} castShadow>
+        <boxGeometry args={[0.58, 0.58, depth * 0.72]} />
+      </instancedMesh>
+    </group>
+  );
+}
+
+function RoadMerlons({ material }: { material: THREE.Material }) {
+  const countPerSide = 13;
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const dummy = new THREE.Object3D();
+    for (let sideIndex = 0; sideIndex < 2; sideIndex += 1) {
+      const side = sideIndex === 0 ? -1 : 1;
+      for (let index = 0; index < countPerSide; index += 1) {
+        const instance = sideIndex * countPerSide + index;
+        dummy.position.set(ROAD_X + side * 11.2, 9.78, -22 - index * 7.25);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        mesh.current?.setMatrixAt(instance, dummy.matrix);
+      }
+    }
+    if (mesh.current) mesh.current.instanceMatrix.needsUpdate = true;
+  }, []);
+  return (
+    <instancedMesh ref={mesh} args={[undefined, material, countPerSide * 2]} castShadow>
+      <boxGeometry args={[3.4, 1.1, 3.85]} />
+    </instancedMesh>
+  );
+}
+
+function RoadLionFriezes({ materials }: { materials: BabylonMaterials }) {
+  const geometry = useMemo(() => makeAnimalReliefGeometry(), []);
+  const countPerSide = 12;
+  const left = useRef<THREE.InstancedMesh>(null);
+  const right = useRef<THREE.InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const dummy = new THREE.Object3D();
+    for (let index = 0; index < countPerSide; index += 1) {
+      const z = -26 - index * 6.8;
+      if (left.current) {
+        dummy.position.set(ROAD_X - 9.78, 3.2, z);
+        dummy.rotation.set(0, Math.PI / 2, 0);
+        dummy.scale.set(0.82, 0.82, 0.82);
+        dummy.updateMatrix();
+        left.current.setMatrixAt(index, dummy.matrix);
+      }
+      if (right.current) {
+        dummy.position.set(ROAD_X + 9.78, 3.2, z);
+        dummy.rotation.set(0, -Math.PI / 2, 0);
+        dummy.scale.set(-0.82, 0.82, 0.82);
+        dummy.updateMatrix();
+        right.current.setMatrixAt(index, dummy.matrix);
+      }
+    }
+    [left.current, right.current].forEach((mesh) => {
+      if (mesh) mesh.instanceMatrix.needsUpdate = true;
+    });
+  }, []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <group>
+      <instancedMesh ref={left} args={[geometry, materials.ivory, countPerSide]} castShadow />
+      <instancedMesh ref={right} args={[geometry, materials.gold, countPerSide]} castShadow />
+    </group>
+  );
+}
+
+function ProcessionalWay({ materials }: { materials: BabylonMaterials }) {
+  const roadLength = 132;
+  const roadCenterZ = (20 + GATE_Z) / 2;
+  const wallCenterZ = (-20 + GATE_Z) / 2;
+  const wallLength = Math.abs(GATE_Z + 20);
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[ROAD_X, 1.34, roadCenterZ]} receiveShadow>
+        <planeGeometry args={[16.8, roadLength, 10, 64]} />
+        <primitive object={materials.stone} attach="material" />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <group key={side}>
+          <mesh position={[ROAD_X + side * 11.2, 5.25, wallCenterZ]} castShadow receiveShadow>
+            <boxGeometry args={[3.3, 8, wallLength]} />
+            <primitive object={materials.mud} attach="material" />
+          </mesh>
+          <mesh position={[ROAD_X + side * 9.52, 3.5, wallCenterZ]} castShadow>
+            <boxGeometry args={[0.2, 4.8, wallLength - 2]} />
+            <primitive object={materials.blueDark} attach="material" />
+          </mesh>
+          <mesh position={[ROAD_X + side * 9.38, 5.92, wallCenterZ]}>
+            <boxGeometry args={[0.13, 0.24, wallLength - 2]} />
+            <primitive object={materials.gold} attach="material" />
           </mesh>
         </group>
       ))}
+      <RoadMerlons material={materials.mudDark} />
+      <RoadLionFriezes materials={materials} />
     </group>
   );
 }
 
-function IshtarGate({ materials }: { materials: Record<string, THREE.Material> }) {
+function GateFacade({ z, scale = 1, materials }: { z: number; scale?: number; materials: BabylonMaterials }) {
   const animalGeometry = useMemo(() => makeAnimalReliefGeometry(), []);
   const goldReliefs = useRef<THREE.InstancedMesh>(null);
   const ivoryReliefs = useRef<THREE.InstancedMesh>(null);
   const reliefs = useMemo(() => {
     const placements: Array<{ position: [number, number, number]; gold: boolean; flip: boolean }> = [];
-    for (const towerX of [-10.8, 10.8]) {
-      for (let row = 0; row < 5; row += 1) {
+    for (const towerX of [-10.4, 10.4]) {
+      for (let row = 0; row < 6; row += 1) {
         for (let column = 0; column < 2; column += 1) {
           placements.push({
-            position: [towerX - 1.65 + column * 3.3, 5.2 + row * 4.25, 5.14],
+            position: [towerX - 1.55 + column * 3.1, 4.3 + row * 3.65, 5.04],
             gold: (row + column + (towerX > 0 ? 1 : 0)) % 2 === 0,
             flip: towerX > 0,
           });
@@ -405,8 +713,7 @@ function IshtarGate({ materials }: { materials: Record<string, THREE.Material> }
       if (!mesh) return;
       const index = relief.gold ? goldIndex++ : ivoryIndex++;
       dummy.position.set(...relief.position);
-      dummy.rotation.set(0, 0, 0);
-      dummy.scale.set(relief.flip ? -0.86 : 0.86, 0.86, 0.86);
+      dummy.scale.set(relief.flip ? -0.78 : 0.78, 0.78, 0.78);
       dummy.updateMatrix();
       mesh.setMatrixAt(index, dummy.matrix);
     });
@@ -414,165 +721,116 @@ function IshtarGate({ materials }: { materials: Record<string, THREE.Material> }
       if (mesh) mesh.instanceMatrix.needsUpdate = true;
     });
   }, [reliefs]);
-
   useEffect(() => () => animalGeometry.dispose(), [animalGeometry]);
 
   return (
-    <group position={[0, 0, -105]}>
-      <mesh position={[-10.8, 14.2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[9.2, 28.4, 10]} />
+    <group position={[0, 0, z]} scale={scale}>
+      {[-10.4, 10.4].map((x) => (
+        <group key={x}>
+          <mesh position={[x, 13.5, 0]} castShadow receiveShadow>
+            <boxGeometry args={[9.4, 27, 10]} />
+            <primitive object={materials.blue} attach="material" />
+          </mesh>
+          <mesh position={[x, 27.7, 0.1]} castShadow>
+            <boxGeometry args={[9.9, 0.8, 10.4]} />
+            <primitive object={materials.gold} attach="material" />
+          </mesh>
+          <group position={[x, 0, 0]}>
+            <MerlonRow width={9.4} depth={9.5} y={29} material={materials.blue} />
+          </group>
+        </group>
+      ))}
+      <mesh position={[0, 19.1, 0]} castShadow receiveShadow>
+        <boxGeometry args={[11.5, 8.4, 8.8]} />
         <primitive object={materials.blue} attach="material" />
       </mesh>
-      <mesh position={[10.8, 14.2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[9.2, 28.4, 10]} />
-        <primitive object={materials.blue} attach="material" />
-      </mesh>
-
-      <mesh position={[-8.15, 11.8, 0]} castShadow receiveShadow>
-        <boxGeometry args={[7.7, 23.6, 8.4]} />
-        <primitive object={materials.blue} attach="material" />
-      </mesh>
-      <mesh position={[8.15, 11.8, 0]} castShadow receiveShadow>
-        <boxGeometry args={[7.7, 23.6, 8.4]} />
-        <primitive object={materials.blue} attach="material" />
-      </mesh>
-      <mesh position={[0, 19.7, 0]} castShadow receiveShadow>
-        <boxGeometry args={[8.6, 7.8, 8.4]} />
-        <primitive object={materials.blue} attach="material" />
-      </mesh>
-
-      <MerlonRow width={8.6} depth={7.8} y={24.25} material={materials.blue} />
-      <group position={[-10.8, 0, 0]}><MerlonRow width={9.2} depth={9.2} y={29.05} material={materials.blue} /></group>
-      <group position={[10.8, 0, 0]}><MerlonRow width={9.2} depth={9.2} y={29.05} material={materials.blue} /></group>
-
-      <mesh position={[0, 10.65, 4.42]} castShadow>
-        <torusGeometry args={[5.05, 0.62, 10, 64, Math.PI]} />
+      <mesh position={[0, 23.52, 0.15]} castShadow>
+        <boxGeometry args={[11.8, 0.7, 9.15]} />
         <primitive object={materials.gold} attach="material" />
       </mesh>
-      {[-5.05, 5.05].map((x) => (
-        <mesh key={x} position={[x, 5.45, 4.42]} castShadow>
-          <boxGeometry args={[1.22, 10.9, 0.34]} />
+      <MerlonRow width={11.5} depth={8.4} y={25.1} material={materials.blue} />
+      <mesh position={[0, 10.6, 4.47]} castShadow>
+        <torusGeometry args={[5.25, 0.68, 14, 72, Math.PI]} />
+        <primitive object={materials.gold} attach="material" />
+      </mesh>
+      {[-5.25, 5.25].map((x) => (
+        <mesh key={x} position={[x, 5.35, 4.47]} castShadow>
+          <boxGeometry args={[1.34, 10.7, 0.42]} />
           <primitive object={materials.gold} attach="material" />
         </mesh>
       ))}
-      <mesh position={[0, 10.65, 4.62]} castShadow>
-        <torusGeometry args={[4.45, 0.17, 8, 64, Math.PI]} />
+      <mesh position={[0, 10.6, 4.71]} castShadow>
+        <torusGeometry args={[4.55, 0.18, 10, 72, Math.PI]} />
         <primitive object={materials.ivory} attach="material" />
       </mesh>
-      {[-4.45, 4.45].map((x) => (
-        <mesh key={x} position={[x, 5.35, 4.62]} castShadow>
-          <boxGeometry args={[0.34, 10.7, 0.18]} />
+      {[-4.55, 4.55].map((x) => (
+        <mesh key={x} position={[x, 5.3, 4.71]} castShadow>
+          <boxGeometry args={[0.36, 10.6, 0.18]} />
           <primitive object={materials.ivory} attach="material" />
         </mesh>
       ))}
-
-      <group position={[0, 0, 4.3]}>
-        <mesh position={[-2.1, 5.3, 0]} castShadow>
-          <boxGeometry args={[4.05, 10.6, 0.52]} />
+      <group position={[0, 0, 4.31]}>
+        {[-2.15, 2.15].map((x) => (
+          <mesh key={x} position={[x, 5.3, 0]} castShadow>
+            <boxGeometry args={[4.12, 10.6, 0.58]} />
+            <primitive object={materials.wood} attach="material" />
+          </mesh>
+        ))}
+        <mesh position={[0, 10.55, 0]} castShadow>
+          <circleGeometry args={[4.15, 56, 0, Math.PI]} />
           <primitive object={materials.wood} attach="material" />
         </mesh>
-        <mesh position={[2.1, 5.3, 0]} castShadow>
-          <boxGeometry args={[4.05, 10.6, 0.52]} />
-          <primitive object={materials.wood} attach="material" />
-        </mesh>
-        <mesh position={[0, 10.55, 0]} rotation={[0, 0, 0]} castShadow>
-          <circleGeometry args={[4.1, 48, 0, Math.PI]} />
-          <primitive object={materials.wood} attach="material" />
-        </mesh>
-        {[-3.15, -2.1, -1.05, 0, 1.05, 2.1, 3.15].map((x) => (
-          <mesh key={x} position={[x, 5.4, 0.3]}>
-            <boxGeometry args={[0.075, 10.1, 0.08]} />
+        {[-3.2, -2.15, -1.08, 0, 1.08, 2.15, 3.2].map((x) => (
+          <mesh key={x} position={[x, 5.55, 0.34]} castShadow>
+            <boxGeometry args={[0.085, 10.25, 0.09]} />
             <primitive object={materials.bronze} attach="material" />
           </mesh>
         ))}
-        {[2.4, 5.5, 8.6].map((y) => (
-          <mesh key={y} position={[0, y, 0.34]}>
-            <boxGeometry args={[7.8, 0.2, 0.1]} />
+        {[2.4, 5.45, 8.5].map((y) => (
+          <mesh key={y} position={[0, y, 0.36]} castShadow>
+            <boxGeometry args={[8.05, 0.22, 0.11]} />
             <primitive object={materials.bronze} attach="material" />
           </mesh>
         ))}
       </group>
-
-      {[-10.8, 10.8].flatMap((x) => [3.1, 7.35, 11.6, 15.85, 20.1, 24.35].map((y) => (
-        <mesh key={`${x}-${y}`} position={[x, y, 5.08]}>
-          <boxGeometry args={[8.2, 0.22, 0.16]} />
+      {[-10.4, 10.4].flatMap((x) => [2.5, 6.15, 9.8, 13.45, 17.1, 20.75, 24.4].map((y) => (
+        <mesh key={`${x}-${y}`} position={[x, y, 5.06]} castShadow>
+          <boxGeometry args={[8.55, 0.19, 0.15]} />
           <primitive object={materials.gold} attach="material" />
         </mesh>
       )))}
-
       <instancedMesh ref={goldReliefs} args={[animalGeometry, materials.gold, reliefs.filter((r) => r.gold).length]} castShadow />
       <instancedMesh ref={ivoryReliefs} args={[animalGeometry, materials.ivory, reliefs.filter((r) => !r.gold).length]} castShadow />
-
-      {[-29, 29].map((x) => (
-        <group key={x}>
-          <mesh position={[x, 7, -0.8]} castShadow receiveShadow>
-            <boxGeometry args={[27, 14, 8]} />
-            <primitive object={materials.mud} attach="material" />
-          </mesh>
-          <group position={[x, 0, -0.8]}><MerlonRow width={27} depth={7.5} y={14.65} material={materials.blueDark} /></group>
-        </group>
-      ))}
     </group>
   );
 }
 
-function CitySilhouette({ material }: { material: THREE.Material }) {
-  const buildings = useMemo(
-    () =>
-      Array.from({ length: 44 }, (_, index) => {
-        const side = index % 2 === 0 ? -1 : 1;
-        const height = 4.2 + seeded(index + 29) * 9.5;
-        return {
-          x: side * (25 + seeded(index + 71) * 35),
-          y: height / 2,
-          z: -77 - seeded(index + 113) * 75,
-          sx: 5 + seeded(index + 181) * 9,
-          sy: height,
-          sz: 5 + seeded(index + 227) * 9,
-          rotation: (seeded(index + 301) - 0.5) * 0.18,
-        };
-      }),
-    []
-  );
-  const mesh = useRef<THREE.InstancedMesh>(null);
-
-  useLayoutEffect(() => {
-    const dummy = new THREE.Object3D();
-    buildings.forEach((building, index) => {
-      if (!mesh.current) return;
-      dummy.position.set(building.x, building.y, building.z);
-      dummy.rotation.set(0, building.rotation, 0);
-      dummy.scale.set(building.sx, building.sy, building.sz);
-      dummy.updateMatrix();
-      mesh.current.setMatrixAt(index, dummy.matrix);
-    });
-    if (mesh.current) mesh.current.instanceMatrix.needsUpdate = true;
-  }, [buildings]);
-
+function IshtarGate({ materials }: { materials: BabylonMaterials }) {
   return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, buildings.length]} material={material} castShadow receiveShadow>
-      <boxGeometry args={[1, 1, 1]} />
-    </instancedMesh>
-  );
-}
-
-function ProcessionalApproach({ materials }: { materials: Record<string, THREE.Material> }) {
-  return (
-    <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -71]} receiveShadow>
-        <planeGeometry args={[27, 70, 1, 1]} />
-        <meshStandardMaterial color="#87664d" roughness={0.96} bumpMap={(materials.mud as THREE.MeshStandardMaterial).bumpMap} bumpScale={0.12} />
-      </mesh>
-      {[-16.5, 16.5].map((x) => (
+    <group position={[ROAD_X, 1.35, GATE_Z]}>
+      <GateFacade z={0} materials={materials} />
+      <GateFacade z={-15} scale={1.09} materials={materials} />
+      {[-15.9, 15.9].map((x) => (
         <group key={x}>
-          <mesh position={[x, 3.4, -73]} castShadow receiveShadow>
-            <boxGeometry args={[4, 6.8, 68]} />
+          <mesh position={[x, 11.2, -7.5]} castShadow receiveShadow>
+            <boxGeometry args={[5.7, 22.4, 15]} />
             <primitive object={materials.blueDark} attach="material" />
           </mesh>
-          <mesh position={[x + (x < 0 ? 2.04 : -2.04), 4.35, -73]}>
-            <boxGeometry args={[0.18, 0.28, 66]} />
+          <mesh position={[x, 22.75, -7.5]} castShadow>
+            <boxGeometry args={[6, 0.7, 15.4]} />
             <primitive object={materials.gold} attach="material" />
           </mesh>
+        </group>
+      ))}
+      {[-38, 38].map((x) => (
+        <group key={x}>
+          <mesh position={[x, 7.1, -2.5]} castShadow receiveShadow>
+            <boxGeometry args={[37, 14.2, 10]} />
+            <primitive object={materials.mud} attach="material" />
+          </mesh>
+          <group position={[x, 0, -2.5]}>
+            <MerlonRow width={37} depth={9.4} y={14.9} material={materials.mudDark} />
+          </group>
         </group>
       ))}
     </group>
@@ -582,27 +840,24 @@ function ProcessionalApproach({ materials }: { materials: Record<string, THREE.M
 function MovingMist() {
   const { globalProgress } = useScrollState();
   const materials = useRef<Array<THREE.MeshBasicMaterial | null>>([]);
-
   useFrame(({ clock }) => {
-    const fade = 1 - THREE.MathUtils.smoothstep(globalProgress, 0.28, 0.78);
+    const fade = 1 - THREE.MathUtils.smoothstep(globalProgress, 0.38, 0.9);
     materials.current.forEach((material, index) => {
       if (!material) return;
-      material.opacity = fade * (0.16 + index * 0.035) * (0.86 + Math.sin(clock.elapsedTime * 0.15 + index) * 0.14);
+      material.opacity = fade * (0.13 + index * 0.035) * (0.86 + Math.sin(clock.elapsedTime * 0.17 + index) * 0.14);
     });
   });
-
   return (
     <group>
-      {[-42, -66, -88].map((z, index) => (
-        <mesh key={z} position={[0, 6 + index * 1.4, z]}>
-          <planeGeometry args={[64 + index * 16, 18 + index * 4]} />
+      {[-54, -82, -106].map((z, index) => (
+        <mesh key={z} position={[ROAD_X, 7 + index * 1.7, z]}>
+          <planeGeometry args={[72 + index * 16, 20 + index * 5]} />
           <meshBasicMaterial
             ref={(material) => { materials.current[index] = material; }}
-            color="#c49b76"
+            color="#d1b18e"
             transparent
-            opacity={0.2}
+            opacity={0.18}
             depthWrite={false}
-            blending={THREE.NormalBlending}
           />
         </mesh>
       ))}
@@ -613,26 +868,24 @@ function MovingMist() {
 function Atmosphere() {
   const scene = useThree((state) => state.scene);
   const { globalProgress } = useScrollState();
-
   useEffect(() => {
-    const fog = new THREE.Fog("#9b765d", 14, 76);
+    const fog = new THREE.Fog("#aa8d73", 28, 112);
     scene.fog = fog;
     return () => {
       if (scene.fog === fog) scene.fog = null;
     };
   }, [scene]);
-
   useFrame(() => {
     if (!(scene.fog instanceof THREE.Fog)) return;
-    const reveal = THREE.MathUtils.smoothstep(globalProgress, 0.08, 0.74);
-    scene.fog.near = THREE.MathUtils.lerp(13, 24, reveal);
-    scene.fog.far = THREE.MathUtils.lerp(72, 154, reveal);
+    const reveal = THREE.MathUtils.smoothstep(globalProgress, 0.22, 0.9);
+    scene.fog.near = THREE.MathUtils.lerp(25, 42, reveal);
+    scene.fog.far = THREE.MathUtils.lerp(108, 238, reveal);
   });
-
   return null;
 }
 
 export function BabylonJourneyScene() {
+  const gl = useThree((state) => state.gl);
   const textures = useTexture([
     "/textures/babylon-blue-brick.webp",
     "/textures/babylon-blue-brick-bump.webp",
@@ -642,51 +895,69 @@ export function BabylonJourneyScene() {
   const [blueMap, blueBump, mudMap, mudBump] = textures;
 
   useEffect(() => {
+    const anisotropy = Math.min(12, gl.capabilities.getMaxAnisotropy());
     [blueMap, blueBump].forEach((texture) => {
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(2.6, 5.5);
-      texture.anisotropy = 4;
+      texture.repeat.set(3.2, 6.5);
+      texture.anisotropy = anisotropy;
+      texture.needsUpdate = true;
     });
     [mudMap, mudBump].forEach((texture) => {
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(4, 4);
-      texture.anisotropy = 4;
+      texture.repeat.set(5.5, 5.5);
+      texture.anisotropy = anisotropy;
+      texture.needsUpdate = true;
     });
     blueMap.colorSpace = THREE.SRGBColorSpace;
     mudMap.colorSpace = THREE.SRGBColorSpace;
-  }, [blueBump, blueMap, mudBump, mudMap]);
+  }, [blueBump, blueMap, gl, mudBump, mudMap]);
 
-  const materials = useMemo(() => ({
+  const materials = useMemo<BabylonMaterials>(() => ({
     blue: new THREE.MeshPhysicalMaterial({
       map: blueMap,
       bumpMap: blueBump,
-      bumpScale: 0.18,
-      color: "#315f9c",
-      roughness: 0.28,
-      metalness: 0.02,
-      clearcoat: 0.52,
-      clearcoatRoughness: 0.24,
+      bumpScale: 0.2,
+      color: "#356db2",
+      roughness: 0.25,
+      metalness: 0.015,
+      clearcoat: 0.62,
+      clearcoatRoughness: 0.2,
     }),
     blueDark: new THREE.MeshPhysicalMaterial({
       map: blueMap,
       bumpMap: blueBump,
-      bumpScale: 0.12,
-      color: "#183f73",
-      roughness: 0.38,
-      clearcoat: 0.35,
+      bumpScale: 0.15,
+      color: "#214f89",
+      roughness: 0.34,
+      clearcoat: 0.44,
+      clearcoatRoughness: 0.24,
     }),
     mud: new THREE.MeshStandardMaterial({
       map: mudMap,
       bumpMap: mudBump,
-      bumpScale: 0.22,
-      color: "#9a704f",
-      roughness: 0.94,
-      side: THREE.DoubleSide,
+      bumpScale: 0.24,
+      color: "#a77a57",
+      roughness: 0.93,
+      vertexColors: true,
     }),
-    gold: new THREE.MeshPhysicalMaterial({ color: "#d4a43e", roughness: 0.3, metalness: 0.12, clearcoat: 0.42 }),
-    ivory: new THREE.MeshPhysicalMaterial({ color: "#dbc695", roughness: 0.4, clearcoat: 0.3 }),
-    wood: new THREE.MeshStandardMaterial({ color: "#3e2418", roughness: 0.78, metalness: 0.02 }),
-    bronze: new THREE.MeshStandardMaterial({ color: "#8d6a32", roughness: 0.38, metalness: 0.55 }),
+    mudDark: new THREE.MeshStandardMaterial({
+      map: mudMap,
+      bumpMap: mudBump,
+      bumpScale: 0.21,
+      color: "#82593f",
+      roughness: 0.97,
+    }),
+    stone: new THREE.MeshStandardMaterial({
+      map: mudMap,
+      bumpMap: mudBump,
+      bumpScale: 0.11,
+      color: "#c3a276",
+      roughness: 0.82,
+    }),
+    gold: new THREE.MeshPhysicalMaterial({ color: "#e2b54f", roughness: 0.3, metalness: 0.08, clearcoat: 0.52 }),
+    ivory: new THREE.MeshPhysicalMaterial({ color: "#ead8a8", roughness: 0.38, clearcoat: 0.35 }),
+    wood: new THREE.MeshStandardMaterial({ color: "#402417", roughness: 0.78, metalness: 0.015 }),
+    bronze: new THREE.MeshStandardMaterial({ color: "#9b7639", roughness: 0.35, metalness: 0.5 }),
   }), [blueBump, blueMap, mudBump, mudMap]);
 
   useEffect(() => () => {
@@ -697,39 +968,44 @@ export function BabylonJourneyScene() {
     <group>
       <Sky
         distance={450000}
-        sunPosition={[-72, 14, -110]}
+        sunPosition={[-96, 28, -92]}
         inclination={0.49}
-        azimuth={0.18}
-        turbidity={10.8}
-        rayleigh={2.35}
-        mieCoefficient={0.0085}
-        mieDirectionalG={0.87}
+        azimuth={0.16}
+        turbidity={8.6}
+        rayleigh={2.15}
+        mieCoefficient={0.0065}
+        mieDirectionalG={0.86}
       />
-      <color attach="background" args={["#98725d"]} />
-      <hemisphereLight args={["#e8c58e", "#201815", 1.12]} />
+      <color attach="background" args={["#9f806c"]} />
+      <hemisphereLight args={["#f0d4aa", "#2e221d", 1.35]} />
       <directionalLight
-        position={[-38, 34, 24]}
-        intensity={2.7}
-        color="#ffc47b"
+        position={[-72, 56, 38]}
+        intensity={3.4}
+        color="#ffd093"
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-far={240}
-        shadow-camera-left={-48}
-        shadow-camera-right={48}
-        shadow-camera-top={48}
-        shadow-camera-bottom={-28}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-bias={-0.00025}
+        shadow-normalBias={0.025}
+        shadow-camera-near={1}
+        shadow-camera-far={330}
+        shadow-camera-left={-110}
+        shadow-camera-right={110}
+        shadow-camera-top={90}
+        shadow-camera-bottom={-55}
       />
-      <pointLight position={[0, 12, -89]} intensity={2.4} distance={72} color="#d58d4b" />
-
+      <pointLight position={[ROAD_X, 17, GATE_Z + 12]} intensity={3.2} distance={90} color="#d9984f" />
       <River />
       <RiverBanks material={materials.mud} />
       <PalmGrove />
       <ReedsAndStones />
-      <RiverBoat position={[-3.3, 0.02, 38]} scale={0.8} />
-      <RiverBoat position={[3.8, 0.01, -18]} scale={0.62} />
-      <CitySilhouette material={materials.mud} />
-      <ProcessionalApproach materials={materials} />
+      <RiverBoat position={[RIVER_X - 3.2, 0.02, 55]} scale={0.82} />
+      <RiverBoat position={[RIVER_X + 4.1, 0.01, -26]} scale={0.66} />
+      <CityDistrict material={materials.mud} />
+      <CitadelAndPalaces materials={materials} />
+      <AccessRoute material={materials.stone} />
+      <DefensiveCanal />
+      <ProcessionalWay materials={materials} />
       <IshtarGate materials={materials} />
       <MovingMist />
       <Atmosphere />

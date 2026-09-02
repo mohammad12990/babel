@@ -99,12 +99,12 @@ export function Experience() {
       <div className="canvas-layer" aria-hidden={!started}>
         <Canvas
           shadows
-          camera={{ position: [0, 4.4, 82], fov: 44, near: 0.1, far: 600 }}
+          camera={{ position: [-40, 4.25, 112], fov: 45, near: 0.1, far: 720 }}
           gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
-          dpr={[1, 1.65]}
+          dpr={[1, 1.8]}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
-            gl.toneMappingExposure = 1.14;
+            gl.toneMappingExposure = 1.08;
             gl.outputColorSpace = THREE.SRGBColorSpace;
             gl.shadowMap.type = THREE.PCFSoftShadowMap;
             gl.setClearColor(0x98725d, 1);
