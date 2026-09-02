@@ -14,17 +14,18 @@ import { useState } from "react";
 import * as THREE from "three";
 import { ScrollController } from "@/components/ScrollController";
 import { CameraRig } from "@/components/CameraRig";
-import { SceneManager } from "@/components/SceneManager";
 import { ChapterNavigation } from "@/components/ChapterNavigation";
 import { SceneTextOverlay } from "@/components/SceneTextOverlay";
 import { AudioManager } from "@/components/AudioManager";
 import { TransitionOverlay } from "@/components/TransitionOverlay";
+import { CinematicBackdrop } from "@/components/CinematicBackdrop";
+import { AtmosphericDust } from "@/components/world/WorldKit";
 import { SCENES } from "@/data/scenes";
 
 function ScrollTrack() {
   return (
     <>
-      {SCENES.map((scene) => (
+      {SCENES.slice(0, 2).map((scene) => (
         <section
           key={scene.id}
           data-scene-section
@@ -65,25 +66,22 @@ export function Experience() {
     <ScrollController>
       {!started && <IntroGate onBegin={() => setStarted(true)} />}
 
+      <CinematicBackdrop />
+
       <div className="canvas-layer" aria-hidden={!started}>
         <Canvas
           camera={{ position: [0, 4, 40], fov: 42, near: 0.1, far: 1000 }}
-          gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
+          gl={{ antialias: true, powerPreference: "high-performance", alpha: true }}
           dpr={[1, 1.65]}
-          shadows="soft"
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 1.08;
             gl.outputColorSpace = THREE.SRGBColorSpace;
+            gl.setClearColor(0x000000, 0);
           }}
         >
-          <color attach="background" args={["#2b211c"]} />
-          <fog attach="fog" args={["#846449", 42, 170]} />
-          <ambientLight intensity={0.24} color="#e7c89a" />
-          <hemisphereLight args={["#e4bd86", "#251a14", 0.62]} />
-          <directionalLight position={[-25, 30, 35]} intensity={1.65} color="#f0a85f" />
           <CameraRig />
-          <SceneManager />
+          <AtmosphericDust count={190} spread={[48, 22, 100]} position={[0, 2, 2]} />
         </Canvas>
       </div>
 

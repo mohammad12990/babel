@@ -39,12 +39,87 @@ body {
 .canvas-layer {
   position: fixed;
   inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.cinematic-backdrop {
+  position: fixed;
+  inset: 0;
   z-index: 0;
+  overflow: hidden;
+  background: #12100d;
+  animation: backdrop-entry 0.7s ease-out both;
+}
+
+.cinematic-backdrop picture,
+.cinematic-backdrop-image,
+.cinematic-backdrop-grade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.cinematic-backdrop-image {
+  display: block;
+  object-fit: cover;
+  object-position: 50% 50%;
+  transform: translate3d(0, var(--backdrop-y), 0) scale(var(--backdrop-scale));
+  transition: transform 90ms linear;
+  will-change: transform;
+}
+
+.cinematic-backdrop-grade {
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(6, 9, 14, 0.14), transparent 25%, transparent 64%, rgba(8, 7, 5, 0.5)),
+    radial-gradient(circle at 50% 46%, transparent 44%, rgba(7, 6, 5, 0.22) 100%);
+}
+
+.cinematic-backdrop-ishtar-gate .cinematic-backdrop-grade {
+  background:
+    linear-gradient(180deg, rgba(6, 10, 16, 0.12), transparent 35%, rgba(9, 7, 5, 0.28)),
+    radial-gradient(circle at 50% 45%, transparent 48%, rgba(7, 6, 5, 0.25) 100%);
+}
+
+.milestone-end {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 10%;
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  transform: translateX(-50%);
+  color: #f1e7ce;
+  text-align: center;
+  text-shadow: 0 3px 20px rgba(0, 0, 0, 0.75);
+  animation: text-reveal 0.8s ease-out both;
+  pointer-events: none;
+}
+
+.milestone-end span {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 4vw, 3.4rem);
+  letter-spacing: 0.08em;
+}
+
+.milestone-end small {
+  color: var(--color-gold);
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+}
+
+@keyframes backdrop-entry {
+  from { opacity: 0.15; filter: brightness(0.62); }
+  to { opacity: 1; filter: brightness(1); }
 }
 
 .scroll-track {
   position: relative;
-  z-index: 1;
+  z-index: 3;
   pointer-events: none;
 }
 
@@ -472,4 +547,4 @@ body {
 
 /* ---------- Cinematic transition veil ---------- */
 .transition-overlay{position:fixed;inset:0;z-index:11;pointer-events:none;background:radial-gradient(circle at 50% 44%,rgba(63,46,29,.18),rgba(8,7,6,.98));transition:opacity 80ms linear}
-@media (max-width:700px){.experience-header{padding:1rem}.experience-era{display:none}.chapter-nav{left:1rem;bottom:1rem}.scene-text-overlay{left:1rem;right:1rem;bottom:4.75rem}.scroll-cue{right:1rem;bottom:1rem}.scroll-cue span{display:none}.cinematic-vignette{box-shadow:inset 0 0 90px 22px rgba(8,7,5,.58)}.hotspot-card{width:min(220px,72vw)}.past-present-slider input[type="range"]{width:110px}}
+@media (max-width:700px){.cinematic-backdrop-approach .cinematic-backdrop-image{object-position:50% 50%}.cinematic-backdrop-ishtar-gate .cinematic-backdrop-image{object-position:50% 52%}.experience-header{padding:1rem}.experience-era{display:none}.chapter-nav{left:1rem;bottom:1rem}.scene-text-overlay{left:1rem;right:1rem;bottom:4.75rem}.scroll-cue{right:1rem;bottom:1rem}.scroll-cue span{display:none}.cinematic-vignette{box-shadow:inset 0 0 90px 22px rgba(8,7,5,.58)}.milestone-end{bottom:13%}.hotspot-card{width:min(220px,72vw)}.past-present-slider input[type="range"]{width:110px}}
