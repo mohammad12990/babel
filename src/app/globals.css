@@ -1,0 +1,328 @@
+:root {
+  --color-blue: #16294d;
+  --color-clay: #a85c32;
+  --color-clay-dark: #7a3f1f;
+  --color-gold: #c9a227;
+  --color-black: #0e0d0b;
+  --color-sand: #d9c9a3;
+  --color-beige: #e8dfc8;
+
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "Inter", -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-black);
+  color: var(--color-beige);
+  font-family: var(--font-body);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- Canvas & scroll track ---------- */
+
+.canvas-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+.scroll-track {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+#scroll-root {
+  position: relative;
+}
+
+/* ---------- Intro gate ---------- */
+
+.intro-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 2rem;
+  text-align: center;
+  background: radial-gradient(circle at 50% 40%, #1b2a4a 0%, #0e0d0b 75%);
+}
+
+.intro-gate-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(2.5rem, 8vw, 5rem);
+  letter-spacing: 0.02em;
+  margin: 0;
+  color: var(--color-beige);
+}
+
+.intro-gate-subtitle {
+  max-width: 32ch;
+  font-size: 1rem;
+  color: var(--color-sand);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.intro-gate-button {
+  margin-top: 0.5rem;
+  padding: 0.9rem 2rem;
+  background: transparent;
+  border: 1px solid var(--color-gold);
+  color: var(--color-gold);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.intro-gate-button:hover,
+.intro-gate-button:focus-visible {
+  background: var(--color-gold);
+  color: var(--color-black);
+}
+
+.intro-gate-note {
+  font-size: 0.8rem;
+  color: #8a7b5c;
+  margin: 0;
+}
+
+/* ---------- Loading screen ---------- */
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: var(--color-black);
+}
+
+.loading-screen-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  letter-spacing: 0.08em;
+  color: var(--color-sand);
+}
+
+.loading-screen-bar {
+  width: 220px;
+  height: 2px;
+  background: rgba(232, 223, 200, 0.15);
+}
+
+.loading-screen-bar-fill {
+  height: 100%;
+  background: var(--color-gold);
+  transition: width 0.2s ease;
+}
+
+.loading-screen-hint {
+  font-size: 0.8rem;
+  color: #8a7b5c;
+}
+
+/* ---------- Chapter navigation ---------- */
+
+.chapter-nav {
+  position: fixed;
+  bottom: 2rem;
+  left: 2rem;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-sand);
+  pointer-events: none;
+}
+
+.chapter-nav-index {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-gold);
+}
+
+.chapter-nav-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--color-beige);
+}
+
+.chapter-nav-track {
+  display: flex;
+  gap: 4px;
+  margin-left: 0.5rem;
+}
+
+.chapter-nav-tick {
+  width: 10px;
+  height: 2px;
+  background: rgba(232, 223, 200, 0.25);
+}
+
+.chapter-nav-tick-active {
+  background: var(--color-gold);
+}
+
+/* ---------- On-screen text ---------- */
+
+.scene-text-overlay {
+  position: fixed;
+  bottom: 6rem;
+  left: 2rem;
+  right: 2rem;
+  z-index: 12;
+  max-width: 42ch;
+  pointer-events: none;
+}
+
+.scene-text-heading {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1.5rem, 4vw, 2.75rem);
+  margin: 0;
+  color: var(--color-beige);
+}
+
+.scene-text-subtext {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--color-sand);
+  margin: 0;
+}
+
+/* ---------- Historical badge ---------- */
+
+.historical-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.historical-badge-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* ---------- Hotspot ---------- */
+
+.hotspot {
+  position: relative;
+  pointer-events: auto;
+}
+
+.hotspot-marker {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--color-gold);
+  background: rgba(14, 13, 11, 0.6);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hotspot-marker-dot {
+  width: 4px;
+  height: 4px;
+  background: var(--color-gold);
+}
+
+.hotspot-marker:hover,
+.hotspot-marker:focus-visible {
+  background: var(--color-gold);
+}
+
+.hotspot-card {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 240px;
+  padding: 0.9rem;
+  background: rgba(14, 13, 11, 0.92);
+  border: 1px solid rgba(201, 162, 39, 0.4);
+  font-size: 0.8rem;
+}
+
+.hotspot-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.hotspot-card-label {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--color-beige);
+}
+
+.hotspot-card-body {
+  color: var(--color-sand);
+  line-height: 1.5;
+  margin: 0 0 0.5rem 0;
+}
+
+.hotspot-card-note {
+  color: #8a7b5c;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* ---------- Past/Present slider ---------- */
+
+.past-present-slider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  background: rgba(14, 13, 11, 0.85);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--color-sand);
+  white-space: nowrap;
+}
+
+.past-present-slider input[type="range"] {
+  width: 160px;
+  accent-color: var(--color-gold);
+}
+
+/* ---------- Cinematic transition veil ---------- */
+.transition-overlay{position:fixed;inset:0;z-index:11;pointer-events:none;background:radial-gradient(circle at 50% 45%,rgba(201,162,39,.05),rgba(14,13,11,.88));transition:opacity 80ms linear}
+@media (max-width:700px){.chapter-nav{left:1rem;bottom:1rem}.scene-text-overlay{left:1rem;right:1rem;bottom:4.5rem}.hotspot-card{width:min(220px,72vw)}.past-present-slider input[type="range"]{width:110px}}
