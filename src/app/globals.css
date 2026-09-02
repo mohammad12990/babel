@@ -22,6 +22,9 @@ body {
   background: var(--color-black);
   color: var(--color-beige);
   font-family: var(--font-body);
+  overscroll-behavior-y: none;
+  scrollbar-width: thin;
+  scrollbar-color: #8f6b2f #0e0d0b;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -59,38 +62,81 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1.25rem;
+  gap: 1.1rem;
   padding: 2rem;
   text-align: center;
-  background: radial-gradient(circle at 50% 40%, #1b2a4a 0%, #0e0d0b 75%);
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(8, 13, 22, 0.08), rgba(7, 7, 6, 0.78)),
+    radial-gradient(circle at 50% 38%, #28466f 0%, #17233a 28%, #0e0d0b 76%);
+}
+
+.intro-gate::before,
+.intro-gate::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.intro-gate::before {
+  inset: 1.1rem;
+  border: 1px solid rgba(201, 162, 39, 0.24);
+}
+
+.intro-gate::after {
+  width: min(88vw, 780px);
+  height: min(58vw, 410px);
+  bottom: -22%;
+  background: radial-gradient(ellipse, rgba(206, 151, 69, 0.25), transparent 66%);
+  filter: blur(24px);
+}
+
+.intro-gate-kicker {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 0.35rem;
+  color: var(--color-gold);
+  font-size: 0.68rem;
+  letter-spacing: 0.25em;
 }
 
 .intro-gate-title {
+  position: relative;
+  z-index: 1;
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: clamp(2.5rem, 8vw, 5rem);
-  letter-spacing: 0.02em;
+  font-weight: 500;
+  font-size: clamp(3rem, 9vw, 7rem);
+  letter-spacing: 0.035em;
+  line-height: 0.9;
   margin: 0;
-  color: var(--color-beige);
+  color: #f1e7ce;
+  text-shadow: 0 10px 44px rgba(0, 0, 0, 0.55);
 }
 
 .intro-gate-subtitle {
+  position: relative;
+  z-index: 1;
   max-width: 32ch;
-  font-size: 1rem;
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 2vw, 1.3rem);
+  font-style: italic;
   color: var(--color-sand);
-  line-height: 1.6;
-  margin: 0;
+  line-height: 1.55;
+  margin: 0.5rem 0 0.75rem;
 }
 
 .intro-gate-button {
+  position: relative;
+  z-index: 1;
   margin-top: 0.5rem;
   padding: 0.9rem 2rem;
-  background: transparent;
+  background: rgba(14, 13, 11, 0.28);
   border: 1px solid var(--color-gold);
   color: var(--color-gold);
   font-family: var(--font-body);
   font-size: 0.95rem;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: background-color 0.25s ease, color 0.25s ease;
 }
@@ -102,9 +148,99 @@ body {
 }
 
 .intro-gate-note {
+  position: relative;
+  z-index: 1;
   font-size: 0.8rem;
   color: #8a7b5c;
   margin: 0;
+  letter-spacing: 0.12em;
+}
+
+/* ---------- Cinematic frame ---------- */
+
+.cinematic-vignette,
+.cinematic-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+}
+
+.cinematic-vignette {
+  box-shadow:
+    inset 0 0 160px 38px rgba(8, 7, 5, 0.64),
+    inset 0 70px 80px -70px rgba(0, 0, 0, 0.8),
+    inset 0 -90px 90px -75px rgba(0, 0, 0, 0.88);
+}
+
+.cinematic-grain {
+  opacity: 0.06;
+  mix-blend-mode: soft-light;
+  background-image:
+    radial-gradient(circle at 18% 22%, #fff 0 0.45px, transparent 0.7px),
+    radial-gradient(circle at 72% 64%, #fff 0 0.4px, transparent 0.7px),
+    radial-gradient(circle at 41% 81%, #000 0 0.55px, transparent 0.8px);
+  background-size: 5px 5px, 7px 7px, 9px 9px;
+}
+
+.experience-header {
+  position: fixed;
+  z-index: 15;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  pointer-events: none;
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+}
+
+.experience-brand {
+  font-family: var(--font-display);
+  color: #f0e5ca;
+}
+
+.experience-era {
+  color: rgba(217, 201, 163, 0.68);
+}
+
+.scroll-cue {
+  position: fixed;
+  z-index: 14;
+  bottom: 2rem;
+  right: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: rgba(232, 223, 200, 0.72);
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  pointer-events: none;
+}
+
+.scroll-cue i {
+  display: block;
+  width: 38px;
+  height: 1px;
+  overflow: hidden;
+  background: rgba(232, 223, 200, 0.18);
+}
+
+.scroll-cue i::after {
+  content: "";
+  display: block;
+  width: 50%;
+  height: 100%;
+  background: var(--color-gold);
+  animation: scroll-cue 2.1s ease-in-out infinite;
+}
+
+@keyframes scroll-cue {
+  0% { transform: translateX(-110%); }
+  55%, 100% { transform: translateX(210%); }
 }
 
 /* ---------- Loading screen ---------- */
@@ -197,21 +333,32 @@ body {
   z-index: 12;
   max-width: 42ch;
   pointer-events: none;
+  animation: text-reveal 0.65s ease-out both;
 }
 
 .scene-text-heading {
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: clamp(1.5rem, 4vw, 2.75rem);
+  font-size: clamp(2rem, 5vw, 4.5rem);
+  line-height: 0.95;
+  letter-spacing: 0.01em;
   margin: 0;
   color: var(--color-beige);
 }
 
 .scene-text-subtext {
-  font-size: 1rem;
+  max-width: 36ch;
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  font-style: italic;
   line-height: 1.6;
   color: var(--color-sand);
   margin: 0;
+}
+
+@keyframes text-reveal {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ---------- Historical badge ---------- */
@@ -324,5 +471,5 @@ body {
 }
 
 /* ---------- Cinematic transition veil ---------- */
-.transition-overlay{position:fixed;inset:0;z-index:11;pointer-events:none;background:radial-gradient(circle at 50% 45%,rgba(201,162,39,.05),rgba(14,13,11,.88));transition:opacity 80ms linear}
-@media (max-width:700px){.chapter-nav{left:1rem;bottom:1rem}.scene-text-overlay{left:1rem;right:1rem;bottom:4.5rem}.hotspot-card{width:min(220px,72vw)}.past-present-slider input[type="range"]{width:110px}}
+.transition-overlay{position:fixed;inset:0;z-index:11;pointer-events:none;background:radial-gradient(circle at 50% 44%,rgba(63,46,29,.18),rgba(8,7,6,.98));transition:opacity 80ms linear}
+@media (max-width:700px){.experience-header{padding:1rem}.experience-era{display:none}.chapter-nav{left:1rem;bottom:1rem}.scene-text-overlay{left:1rem;right:1rem;bottom:4.75rem}.scroll-cue{right:1rem;bottom:1rem}.scroll-cue span{display:none}.cinematic-vignette{box-shadow:inset 0 0 90px 22px rgba(8,7,5,.58)}.hotspot-card{width:min(220px,72vw)}.past-present-slider input[type="range"]{width:110px}}

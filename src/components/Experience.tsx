@@ -11,6 +11,7 @@
 
 import { Canvas } from "@react-three/fiber";
 import { useState } from "react";
+import * as THREE from "three";
 import { ScrollController } from "@/components/ScrollController";
 import { CameraRig } from "@/components/CameraRig";
 import { SceneManager } from "@/components/SceneManager";
@@ -38,14 +39,21 @@ function ScrollTrack() {
 function IntroGate({ onBegin }: { onBegin: () => void }) {
   return (
     <div className="intro-gate">
+      <p className="intro-gate-kicker">AN INTERACTIVE ARCHAEOLOGICAL JOURNEY</p>
       <h1 className="intro-gate-title">ENTER BABYLON</h1>
       <p className="intro-gate-subtitle">
-        A cinematic journey to Babylon under Nebuchadnezzar II, c. 605–562 BCE.
+        Travel the Euphrates toward the city that shaped an ancient world.
       </p>
-      <button className="intro-gate-button" onClick={onBegin}>
-        Begin the journey
+      <button
+        className="intro-gate-button"
+        onClick={() => {
+          window.scrollTo({ top: 0 });
+          onBegin();
+        }}
+      >
+        Enter the city
       </button>
-      <p className="intro-gate-note">Best experienced with sound on.</p>
+      <p className="intro-gate-note">Babylon · 605–562 BCE</p>
     </div>
   );
 }
@@ -62,6 +70,12 @@ export function Experience() {
           camera={{ position: [0, 4, 40], fov: 42, near: 0.1, far: 1000 }}
           gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
           dpr={[1, 1.65]}
+          shadows="soft"
+          onCreated={({ gl }) => {
+            gl.toneMapping = THREE.ACESFilmicToneMapping;
+            gl.toneMappingExposure = 1.08;
+            gl.outputColorSpace = THREE.SRGBColorSpace;
+          }}
         >
           <color attach="background" args={["#2b211c"]} />
           <fog attach="fog" args={["#846449", 42, 170]} />
@@ -75,6 +89,16 @@ export function Experience() {
 
       {started && (
         <>
+          <div className="cinematic-vignette" aria-hidden="true" />
+          <div className="cinematic-grain" aria-hidden="true" />
+          <header className="experience-header">
+            <span className="experience-brand">ENTER BABYLON</span>
+            <span className="experience-era">605–562 BCE</span>
+          </header>
+          <div className="scroll-cue" aria-hidden="true">
+            <span>SCROLL TO APPROACH</span>
+            <i />
+          </div>
           <ChapterNavigation />
           <SceneTextOverlay />
           <AudioManager />

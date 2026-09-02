@@ -22,12 +22,13 @@ Hypothetical / Disputed).
 - Full design-token CSS system (`globals.css`) matching the palette and
   typography defined in the creative direction.
 
-**Placeholder (intentionally, to be swapped later):**
-- All 3D geometry in `src/components/scenes/*.tsx` is primitive
-  boxes/cylinders/planes standing in for the real GLTF assets listed in the
-  3D ASSET PLAN. Swap the `<mesh>` blocks for `<primitive object={gltf.scene}>`
-  once Blender exports exist — the camera/scroll/hotspot systems do not
-  need to change.
+**Visual production status:**
+- Scenes 01–02 now have their first cinematic production pass: animated
+  Euphrates water, instanced river vegetation, layered Babylon skyline,
+  filmic lighting, a rebuilt glazed-brick Ishtar Gate, baked brick variation,
+  instanced reliefs, and a camera path that ends at the closed gate.
+- Scenes 03–08 still use procedural placeholder geometry that can later be
+  replaced by GLTF assets without changing the camera/scroll/hotspot systems.
 - No Draco/KTX2 compression pipeline yet (nothing to compress until real
   assets exist).
 
@@ -53,4 +54,6 @@ files in `src/app/layout.tsx`.
 4. Add LOD switching and Draco/KTX2 loading once real assets land.
 
 ## Visual Production V1 additions
-This pass replaces the original primitive-only presentation with reusable procedural environment systems: atmospheric dust, animated water, instanced palms/crowds, relief motifs, denser city massing, improved Ishtar Gate, Processional Way, Etemenanki, palace, Gardens uncertainty blend, aligned Past/Present comparison, cinematic transition veil, and map camera overrides. These remain intentionally GLTF-replaceable; final museum-quality hero assets/textures belong to the Blender/GLTF production pass.
+This pass replaces the original primitive-only presentation with reusable
+procedural environment systems. The first milestone is Scenes 01–02; later
+milestones cover the remaining scene pairs and their correction passes.

@@ -65,7 +65,11 @@ export function SceneManager() {
         const Component = SCENE_COMPONENTS[id];
         if (!Component) return null;
         const isActive = id === activeSceneId;
-        return <Component key={id} progress={isActive ? sceneProgress : id === SCENES[activeIndex + 1]?.id ? 0 : 1} />;
+        return (
+          <group key={id} visible={isActive}>
+            <Component progress={isActive ? sceneProgress : id === SCENES[activeIndex + 1]?.id ? 0 : 1} />
+          </group>
+        );
       })}
     </Suspense>
   );

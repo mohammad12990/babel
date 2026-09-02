@@ -49,7 +49,8 @@ export const SCENES: SceneDefinition[] = [
     scrollLengthVh: 220,
     cameraKeyframes: [
       { progress: 0, position: [0, 6, 60], lookAt: [0, 3, 0], fov: 42 },
-      { progress: 1, position: [0, 3.5, 18], lookAt: [0, 4, -20], fov: 38 },
+      { progress: 0.55, position: [1.2, 4.6, 40], lookAt: [0, 4, -28], fov: 40 },
+      { progress: 1, position: [0, 3.7, 23], lookAt: [0, 5.2, -48], fov: 37 },
     ],
     onScreenText: [
       { at: 0.05, until: 0.35, heading: "BABYLON" },
@@ -69,11 +70,12 @@ export const SCENES: SceneDefinition[] = [
     title: "THE ISHTAR GATE",
     scrollLengthVh: 240,
     cameraKeyframes: [
-      { progress: 0, position: [0, 4, 14], lookAt: [0, 6, 0], fov: 40 },
-      { progress: 0.7, position: [0, 5, 4], lookAt: [0, 9, -4], fov: 44 },
-      { progress: 1, position: [0, 5.5, 1], lookAt: [0, 10, -8], fov: 46 },
+      { progress: 0, position: [0, 4.2, 18], lookAt: [0, 7.4, -20], fov: 42 },
+      { progress: 0.55, position: [-0.45, 4.7, 1.5], lookAt: [0, 9.2, -20], fov: 43 },
+      { progress: 0.82, position: [0.25, 5.35, -7.8], lookAt: [0, 10.8, -20], fov: 45 },
+      { progress: 1, position: [0, 5.25, -12.7], lookAt: [0, 7.6, -20], fov: 47 },
     ],
-    onScreenText: [{ at: 0.02, heading: "02 / 08 — THE ISHTAR GATE" }],
+    onScreenText: [{ at: 0.02, until: 0.22, heading: "02 / 08 — THE ISHTAR GATE" }],
     hotspotIds: ["glazed-bricks", "gate-lions", "gate-bulls", "gate-dragons"],
     ambienceTrack: "gate_threshold",
     transitionOut: "threshold",
