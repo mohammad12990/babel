@@ -444,6 +444,7 @@ function BabylonSky() {
         float horizonGlow = (1.0 - smoothstep(0.0, 0.22, height)) * 0.12;
         color += uSun * horizonGlow;
         gl_FragColor = vec4(color, 1.0);
+        #include <colorspace_fragment>
       }
     `,
     depthTest: false,
