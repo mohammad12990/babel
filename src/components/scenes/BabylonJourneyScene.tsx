@@ -32,8 +32,8 @@ const seeded = (seed: number) => {
 const riverCenterAt = (z: number) => RIVER_X + Math.sin((z + 22) * 0.018) * 1.55;
 
 function makeRiverGeometry() {
-  const rows = 210;
-  const columns = 28;
+  const rows = 320;
+  const columns = 48;
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
@@ -226,11 +226,11 @@ function River() {
   const material = useMemo(() => new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
-      uDeepColor: { value: new THREE.Color("#062c3b") },
-      uMidColor: { value: new THREE.Color("#155b70") },
-      uSkyColor: { value: new THREE.Color("#78a4c2") },
-      uHorizonColor: { value: new THREE.Color("#d6aa70") },
-      uSunColor: { value: new THREE.Color("#ffd69a") },
+      uDeepColor: { value: new THREE.Color("#032733") },
+      uMidColor: { value: new THREE.Color("#0e5262") },
+      uSkyColor: { value: new THREE.Color("#7093a7") },
+      uHorizonColor: { value: new THREE.Color("#c99a60") },
+      uSunColor: { value: new THREE.Color("#ffd08a") },
       uSunDirection: { value: new THREE.Vector3(-0.56, 0.32, -0.76).normalize() },
     },
     vertexShader: `
@@ -240,10 +240,10 @@ function River() {
       varying float vWave;
 
       float riverWave(vec2 point) {
-        float broad = sin(point.y * 0.115 + uTime * 0.72) * 0.13;
-        float crossing = sin(point.x * 0.62 - point.y * 0.035 - uTime * 0.54) * 0.06;
-        float ripples = sin(point.x * 1.45 + point.y * 0.31 + uTime * 1.05) * 0.028;
-        float detail = sin(point.x * 2.6 - point.y * 0.18 - uTime * 1.28) * 0.016;
+        float broad = sin(point.y * 0.16 + uTime * 0.55) * 0.065;
+        float crossing = sin(point.x * 0.72 - point.y * 0.055 - uTime * 0.48) * 0.035;
+        float ripples = sin(point.x * 2.05 + point.y * 0.48 + uTime * 0.94) * 0.018;
+        float detail = sin(point.x * 3.8 - point.y * 0.28 - uTime * 1.15) * 0.009;
         return broad + crossing + ripples + detail;
       }
 
@@ -294,30 +294,31 @@ function River() {
       void main() {
         vec3 normal = normalize(vWorldNormal);
         vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
-        normal.x += sin(vWorldPosition.z * 0.72 - uTime * 1.15) * 0.035;
-        normal.z += sin(vWorldPosition.x * 1.15 + vWorldPosition.z * 0.18 + uTime * 0.88) * 0.045;
+        normal.x += sin(vWorldPosition.z * 1.45 - uTime * 1.1) * 0.022;
+        normal.z += sin(vWorldPosition.x * 2.7 + vWorldPosition.z * 0.34 + uTime * 0.84) * 0.03;
         normal = normalize(normal);
         float fresnel = pow(1.0 - max(dot(viewDirection, normal), 0.0), 3.2);
         float horizonMix = smoothstep(0.0, 0.72, fresnel);
         vec3 reflectedSky = mix(uHorizonColor, uSkyColor, horizonMix);
 
-        float flowNoise = noise(vWorldPosition.xz * vec2(0.17, 0.075) + vec2(uTime * 0.045, -uTime * 0.085));
-        float fineRipple = sin(vWorldPosition.x * 2.8 + vWorldPosition.z * 0.42 - uTime * 1.6) * 0.5 + 0.5;
+        float flowNoise = noise(vWorldPosition.xz * vec2(0.31, 0.095) + vec2(uTime * 0.04, -uTime * 0.072));
+        float fineRipple = sin(vWorldPosition.x * 5.2 + vWorldPosition.z * 0.72 - uTime * 1.45) * 0.5 + 0.5;
         float cameraDistance = distance(cameraPosition, vWorldPosition);
         float distanceLight = smoothstep(12.0, 105.0, cameraDistance);
         vec3 bodyColor = mix(uDeepColor, uMidColor, distanceLight * 0.7 + flowNoise * 0.12);
-        vec3 color = mix(bodyColor, reflectedSky, 0.12 + fresnel * 0.34 + distanceLight * 0.08);
+        vec3 color = mix(bodyColor, reflectedSky, 0.09 + fresnel * 0.28 + distanceLight * 0.055);
 
-        float rippleA = sin(vWorldPosition.z * 1.22 - uTime * 1.7 + sin(vWorldPosition.x * 0.48) * 1.8);
-        float rippleB = sin(vWorldPosition.x * 1.9 + vWorldPosition.z * 0.28 + uTime * 1.15);
-        float rippleRidge = pow(max(0.0, rippleA * 0.66 + rippleB * 0.34), 8.0);
-        color += mix(uSkyColor, uSunColor, distanceLight * 0.42) * rippleRidge * (0.035 + fresnel * 0.075);
+        float rippleA = sin(vWorldPosition.z * 2.4 - uTime * 1.48 + sin(vWorldPosition.x * 0.82) * 1.15);
+        float rippleB = sin(vWorldPosition.x * 4.6 + vWorldPosition.z * 0.5 + uTime * 1.02);
+        float rippleMask = smoothstep(0.42, 0.78, flowNoise) * (0.58 + fineRipple * 0.42);
+        float rippleRidge = pow(max(0.0, rippleA * 0.78 + rippleB * 0.22), 15.0) * rippleMask;
+        color += mix(uSkyColor, uSunColor, 0.48 + distanceLight * 0.32) * rippleRidge * (0.024 + fresnel * 0.052);
 
         vec3 reflectedSun = reflect(-uSunDirection, normal);
         float sunGlint = pow(max(dot(reflectedSun, viewDirection), 0.0), 150.0);
-        sunGlint += pow(max(dot(reflectedSun, viewDirection), 0.0), 34.0) * 0.16;
-        float shimmer = mix(0.62, 1.0, fineRipple * flowNoise);
-        color += uSunColor * sunGlint * shimmer * 1.65;
+        sunGlint += pow(max(dot(reflectedSun, viewDirection), 0.0), 42.0) * 0.13;
+        float shimmer = mix(0.48, 1.0, fineRipple * flowNoise);
+        color += uSunColor * sunGlint * shimmer * 1.42;
         color += uSkyColor * max(vWave, 0.0) * 0.18;
 
         gl_FragColor = vec4(color, 1.0);
@@ -366,11 +367,11 @@ function BabylonSky() {
   const material = useMemo(() => new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
-      uZenith: { value: new THREE.Color("#4f7ea8") },
-      uMidSky: { value: new THREE.Color("#91b3cc") },
-      uHorizon: { value: new THREE.Color("#efd0a0") },
-      uCloud: { value: new THREE.Color("#fff3df") },
-      uCloudShadow: { value: new THREE.Color("#b9c5ca") },
+      uZenith: { value: new THREE.Color("#47769e") },
+      uMidSky: { value: new THREE.Color("#8db2ca") },
+      uHorizon: { value: new THREE.Color("#edc895") },
+      uCloud: { value: new THREE.Color("#fff5e5") },
+      uCloudShadow: { value: new THREE.Color("#aebdc3") },
       uSun: { value: new THREE.Color("#ffe0a7") },
       uSunDirection: { value: new THREE.Vector3(-0.56, 0.16, -0.81).normalize() },
     },
@@ -411,7 +412,7 @@ function BabylonSky() {
       float fbm(vec2 point) {
         float value = 0.0;
         float amplitude = 0.55;
-        for (int index = 0; index < 4; index++) {
+        for (int index = 0; index < 3; index++) {
           value += noise(point) * amplitude;
           point = point * 2.03 + vec2(17.1, 9.2);
           amplitude *= 0.48;
@@ -427,21 +428,31 @@ function BabylonSky() {
 
         float longitude = atan(direction.z, direction.x) / 6.2831853 + 0.5;
         float latitude = asin(clamp(direction.y, -1.0, 1.0)) / 3.1415926 + 0.5;
-        vec2 cloudUv = vec2(longitude * 7.5 + uTime * 0.0014, latitude * 9.0);
-        float cloudNoise = fbm(cloudUv);
-        float cloudShape = smoothstep(0.54, 0.7, cloudNoise);
-        float cloudBand = smoothstep(0.055, 0.18, height) * (1.0 - smoothstep(0.66, 0.88, height));
-        float cloudDensity = cloudShape * cloudBand * 0.66;
-        vec3 cloudColor = mix(uCloudShadow, uCloud, smoothstep(0.48, 0.76, cloudNoise));
+        vec2 cloudUv = vec2(longitude * 15.0 + uTime * 0.0012, latitude * 13.0);
+        vec2 cloudWarp = vec2(
+          sin(cloudUv.y * 0.72 + cloudUv.x * 0.18),
+          sin(cloudUv.x * 0.41 - cloudUv.y * 0.26)
+        );
+        vec2 warpedUv = cloudUv + cloudWarp * vec2(0.72, 0.24);
+        float cloudBase = fbm(warpedUv * vec2(0.56, 1.18));
+        float cloudDetail = fbm(warpedUv * vec2(1.45, 2.1) + vec2(13.7, 4.6));
+        float cloudClusters = noise(vec2(longitude * 5.2 - uTime * 0.0007, latitude * 4.1) + vec2(2.3, 8.7));
+        float cloudNoise = cloudBase * 0.72 + cloudDetail * 0.28;
+        float cloudShape = smoothstep(0.59, 0.715, cloudNoise) * smoothstep(0.44, 0.61, cloudClusters);
+        float lowClouds = smoothstep(0.045, 0.12, height) * (1.0 - smoothstep(0.34, 0.48, height));
+        float highWisps = smoothstep(0.28, 0.4, height) * (1.0 - smoothstep(0.68, 0.82, height));
+        float wispNoise = smoothstep(0.67, 0.8, cloudDetail + sin(warpedUv.x * 1.8) * 0.055);
+        float cloudDensity = cloudShape * lowClouds * 0.72 + wispNoise * highWisps * 0.18;
+        vec3 cloudColor = mix(uCloudShadow, uCloud, smoothstep(0.57, 0.74, cloudNoise));
         color = mix(color, cloudColor, cloudDensity);
 
         float sunDot = max(dot(direction, uSunDirection), 0.0);
-        float sunGlow = pow(sunDot, 5.5) * 0.32;
+        float sunGlow = pow(sunDot, 5.5) * 0.27;
         float sunDisk = smoothstep(0.9988, 0.99972, sunDot);
         color += uSun * sunGlow;
         color = mix(color, uSun, sunDisk * 0.92);
 
-        float horizonGlow = (1.0 - smoothstep(0.0, 0.22, height)) * 0.12;
+        float horizonGlow = (1.0 - smoothstep(0.0, 0.2, height)) * 0.1;
         color += uSun * horizonGlow;
         gl_FragColor = vec4(color, 1.0);
         #include <colorspace_fragment>
@@ -601,7 +612,15 @@ function ReedsAndStones() {
   );
 }
 
-function RiverBoat({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+function RiverBoat({
+  position,
+  scale = 1,
+  rotationY = 0,
+}: {
+  position: [number, number, number];
+  scale?: number;
+  rotationY?: number;
+}) {
   const boat = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
     if (!boat.current) return;
@@ -609,7 +628,7 @@ function RiverBoat({ position, scale = 1 }: { position: [number, number, number]
     boat.current.rotation.z = Math.sin(clock.elapsedTime * 0.43 + position[0]) * 0.016;
   });
   return (
-    <group ref={boat} position={position} scale={scale}>
+    <group ref={boat} position={position} rotation={[0, rotationY, 0]} scale={scale}>
       <mesh scale={[1.22, 0.23, 2.95]} castShadow>
         <sphereGeometry args={[1, 30, 14, 0, Math.PI * 2, 0, Math.PI * 0.61]} />
         <meshStandardMaterial color="#3a2216" roughness={0.94} side={THREE.DoubleSide} />
@@ -620,7 +639,13 @@ function RiverBoat({ position, scale = 1 }: { position: [number, number, number]
       </mesh>
       <mesh position={[0.44, 1.42, 0]} rotation={[0, 0, -0.13]} castShadow>
         <planeGeometry args={[0.98, 2.2, 2, 2]} />
-        <meshStandardMaterial color="#d2c098" roughness={0.9} side={THREE.DoubleSide} />
+        <meshStandardMaterial
+          color="#d8c79f"
+          emissive="#5b4930"
+          emissiveIntensity={0.16}
+          roughness={0.9}
+          side={THREE.DoubleSide}
+        />
       </mesh>
     </group>
   );
@@ -1183,10 +1208,10 @@ export function BabylonJourneyScene() {
     <group>
       <BabylonSky />
       <color attach="background" args={["#91b3cc"]} />
-      <hemisphereLight args={["#d7e5ed", "#513622", 1.45]} />
+      <hemisphereLight args={["#e3eef2", "#75553b", 1.82]} />
       <directionalLight
         position={[-96, 48, -72]}
-        intensity={2.75}
+        intensity={2.9}
         color="#ffd39b"
         castShadow
         shadow-mapSize-width={2048}
@@ -1200,13 +1225,14 @@ export function BabylonJourneyScene() {
         shadow-camera-top={90}
         shadow-camera-bottom={-55}
       />
+      <directionalLight position={[72, 34, 48]} intensity={0.48} color="#c7d8de" />
       <pointLight position={[ROAD_X, 17, GATE_Z + 12]} intensity={3.2} distance={90} color="#d9984f" />
       <River />
       <RiverBanks material={materials.mud} wetMaterial={materials.wetMud} />
       <PalmGrove />
       <ReedsAndStones />
-      <RiverBoat position={[RIVER_X - 3.2, 0.02, 55]} scale={0.82} />
-      <RiverBoat position={[RIVER_X + 4.1, 0.01, -26]} scale={0.66} />
+      <RiverBoat position={[RIVER_X - 5.1, 0.02, 38]} scale={0.62} rotationY={-0.2} />
+      <RiverBoat position={[RIVER_X + 4.8, 0.01, -39]} scale={0.58} rotationY={0.16} />
       <CityDistrict material={materials.city} />
       <CitadelAndPalaces materials={materials} />
       <AccessRoute material={materials.stone} />
