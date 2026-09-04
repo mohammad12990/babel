@@ -1,6 +1,6 @@
 "use client";
 
-import { Sky, useTexture } from "@react-three/drei";
+import { useTexture } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -226,10 +226,10 @@ function River() {
   const material = useMemo(() => new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
-      uDeepColor: { value: new THREE.Color("#123d50") },
-      uMidColor: { value: new THREE.Color("#2b7184") },
-      uSkyColor: { value: new THREE.Color("#a8c2d4") },
-      uHorizonColor: { value: new THREE.Color("#e4c38f") },
+      uDeepColor: { value: new THREE.Color("#062c3b") },
+      uMidColor: { value: new THREE.Color("#155b70") },
+      uSkyColor: { value: new THREE.Color("#78a4c2") },
+      uHorizonColor: { value: new THREE.Color("#d6aa70") },
       uSunColor: { value: new THREE.Color("#ffd69a") },
       uSunDirection: { value: new THREE.Vector3(-0.56, 0.32, -0.76).normalize() },
     },
@@ -240,10 +240,10 @@ function River() {
       varying float vWave;
 
       float riverWave(vec2 point) {
-        float broad = sin(point.y * 0.115 + uTime * 0.72) * 0.075;
-        float crossing = sin(point.x * 0.62 - point.y * 0.035 - uTime * 0.54) * 0.034;
-        float ripples = sin(point.x * 1.45 + point.y * 0.31 + uTime * 1.05) * 0.016;
-        float detail = sin(point.x * 2.6 - point.y * 0.18 - uTime * 1.28) * 0.009;
+        float broad = sin(point.y * 0.115 + uTime * 0.72) * 0.13;
+        float crossing = sin(point.x * 0.62 - point.y * 0.035 - uTime * 0.54) * 0.06;
+        float ripples = sin(point.x * 1.45 + point.y * 0.31 + uTime * 1.05) * 0.028;
+        float detail = sin(point.x * 2.6 - point.y * 0.18 - uTime * 1.28) * 0.016;
         return broad + crossing + ripples + detail;
       }
 
@@ -294,23 +294,31 @@ function River() {
       void main() {
         vec3 normal = normalize(vWorldNormal);
         vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
+        normal.x += sin(vWorldPosition.z * 0.72 - uTime * 1.15) * 0.035;
+        normal.z += sin(vWorldPosition.x * 1.15 + vWorldPosition.z * 0.18 + uTime * 0.88) * 0.045;
+        normal = normalize(normal);
         float fresnel = pow(1.0 - max(dot(viewDirection, normal), 0.0), 3.2);
-        float facing = clamp(dot(viewDirection, normal), 0.0, 1.0);
         float horizonMix = smoothstep(0.0, 0.72, fresnel);
         vec3 reflectedSky = mix(uHorizonColor, uSkyColor, horizonMix);
 
         float flowNoise = noise(vWorldPosition.xz * vec2(0.17, 0.075) + vec2(uTime * 0.045, -uTime * 0.085));
         float fineRipple = sin(vWorldPosition.x * 2.8 + vWorldPosition.z * 0.42 - uTime * 1.6) * 0.5 + 0.5;
-        float waterDepth = smoothstep(0.18, 0.92, facing);
-        vec3 bodyColor = mix(uMidColor, uDeepColor, waterDepth * 0.72 + flowNoise * 0.16);
-        vec3 color = mix(bodyColor, reflectedSky, 0.24 + fresnel * 0.56);
+        float cameraDistance = distance(cameraPosition, vWorldPosition);
+        float distanceLight = smoothstep(12.0, 105.0, cameraDistance);
+        vec3 bodyColor = mix(uDeepColor, uMidColor, distanceLight * 0.7 + flowNoise * 0.12);
+        vec3 color = mix(bodyColor, reflectedSky, 0.12 + fresnel * 0.34 + distanceLight * 0.08);
+
+        float rippleA = sin(vWorldPosition.z * 1.22 - uTime * 1.7 + sin(vWorldPosition.x * 0.48) * 1.8);
+        float rippleB = sin(vWorldPosition.x * 1.9 + vWorldPosition.z * 0.28 + uTime * 1.15);
+        float rippleRidge = pow(max(0.0, rippleA * 0.66 + rippleB * 0.34), 8.0);
+        color += mix(uSkyColor, uSunColor, distanceLight * 0.42) * rippleRidge * (0.035 + fresnel * 0.075);
 
         vec3 reflectedSun = reflect(-uSunDirection, normal);
         float sunGlint = pow(max(dot(reflectedSun, viewDirection), 0.0), 150.0);
         sunGlint += pow(max(dot(reflectedSun, viewDirection), 0.0), 34.0) * 0.16;
         float shimmer = mix(0.62, 1.0, fineRipple * flowNoise);
         color += uSunColor * sunGlint * shimmer * 1.65;
-        color += uSkyColor * max(vWave, 0.0) * 0.12;
+        color += uSkyColor * max(vWave, 0.0) * 0.18;
 
         gl_FragColor = vec4(color, 1.0);
         #include <tonemapping_fragment>
@@ -354,37 +362,36 @@ function RiverBanks({ material, wetMaterial }: { material: THREE.Material; wetMa
   );
 }
 
-function CloudVeil({
-  position,
-  scale,
-  opacity,
-  drift,
-}: {
-  position: [number, number, number];
-  scale: [number, number];
-  opacity: number;
-  drift: number;
-}) {
+function BabylonSky() {
   const material = useMemo(() => new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
-      uOpacity: { value: opacity },
-      uDrift: { value: drift },
-      uColor: { value: new THREE.Color("#fff2da") },
+      uZenith: { value: new THREE.Color("#4f7ea8") },
+      uMidSky: { value: new THREE.Color("#91b3cc") },
+      uHorizon: { value: new THREE.Color("#efd0a0") },
+      uCloud: { value: new THREE.Color("#fff3df") },
+      uCloudShadow: { value: new THREE.Color("#b9c5ca") },
+      uSun: { value: new THREE.Color("#ffe0a7") },
+      uSunDirection: { value: new THREE.Vector3(-0.56, 0.16, -0.81).normalize() },
     },
     vertexShader: `
-      varying vec2 vUv;
+      varying vec3 vWorldPosition;
       void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        gl_Position = projectionMatrix * viewMatrix * worldPosition;
       }
     `,
     fragmentShader: `
       uniform float uTime;
-      uniform float uOpacity;
-      uniform float uDrift;
-      uniform vec3 uColor;
-      varying vec2 vUv;
+      uniform vec3 uZenith;
+      uniform vec3 uMidSky;
+      uniform vec3 uHorizon;
+      uniform vec3 uCloud;
+      uniform vec3 uCloudShadow;
+      uniform vec3 uSun;
+      uniform vec3 uSunDirection;
+      varying vec3 vWorldPosition;
 
       float hash(vec2 point) {
         return fract(sin(dot(point, vec2(127.1, 311.7))) * 43758.5453123);
@@ -413,23 +420,38 @@ function CloudVeil({
       }
 
       void main() {
-        vec2 centered = vUv - 0.5;
-        vec2 movingUv = vUv * vec2(3.4, 2.25) + vec2(uTime * uDrift, 0.0);
-        float cloud = fbm(movingUv);
-        cloud = smoothstep(0.43, 0.72, cloud);
-        float edge = smoothstep(0.0, 0.22, vUv.x) * smoothstep(0.0, 0.22, 1.0 - vUv.x);
-        edge *= smoothstep(0.0, 0.34, vUv.y) * smoothstep(0.0, 0.34, 1.0 - vUv.y);
-        float density = cloud * edge * uOpacity;
-        vec3 shaded = mix(uColor * 0.8, uColor, smoothstep(-0.3, 0.45, centered.y));
-        gl_FragColor = vec4(shaded, density);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
+        vec3 direction = normalize(vWorldPosition - cameraPosition);
+        float height = clamp(direction.y, 0.0, 1.0);
+        vec3 color = mix(uHorizon, uMidSky, smoothstep(0.015, 0.3, height));
+        color = mix(color, uZenith, smoothstep(0.32, 0.92, height));
+
+        float longitude = atan(direction.z, direction.x) / 6.2831853 + 0.5;
+        float latitude = asin(clamp(direction.y, -1.0, 1.0)) / 3.1415926 + 0.5;
+        vec2 cloudUv = vec2(longitude * 7.5 + uTime * 0.0014, latitude * 9.0);
+        float cloudNoise = fbm(cloudUv);
+        float cloudShape = smoothstep(0.54, 0.7, cloudNoise);
+        float cloudBand = smoothstep(0.055, 0.18, height) * (1.0 - smoothstep(0.66, 0.88, height));
+        float cloudDensity = cloudShape * cloudBand * 0.66;
+        vec3 cloudColor = mix(uCloudShadow, uCloud, smoothstep(0.48, 0.76, cloudNoise));
+        color = mix(color, cloudColor, cloudDensity);
+
+        float sunDot = max(dot(direction, uSunDirection), 0.0);
+        float sunGlow = pow(sunDot, 5.5) * 0.32;
+        float sunDisk = smoothstep(0.9988, 0.99972, sunDot);
+        color += uSun * sunGlow;
+        color = mix(color, uSun, sunDisk * 0.92);
+
+        float horizonGlow = (1.0 - smoothstep(0.0, 0.22, height)) * 0.12;
+        color += uSun * horizonGlow;
+        gl_FragColor = vec4(color, 1.0);
       }
     `,
-    transparent: true,
+    depthTest: false,
     depthWrite: false,
-    side: THREE.DoubleSide,
-  }), [drift, opacity]);
+    fog: false,
+    side: THREE.BackSide,
+    toneMapped: false,
+  }), []);
 
   useFrame(({ clock }) => {
     material.uniforms.uTime.value = clock.elapsedTime;
@@ -438,19 +460,9 @@ function CloudVeil({
   useEffect(() => () => material.dispose(), [material]);
 
   return (
-    <mesh position={position} material={material} renderOrder={-1}>
-      <planeGeometry args={scale} />
+    <mesh material={material} renderOrder={-100} frustumCulled={false}>
+      <sphereGeometry args={[390, 64, 32]} />
     </mesh>
-  );
-}
-
-function MorningClouds() {
-  return (
-    <group>
-      <CloudVeil position={[-56, 52, -205]} scale={[112, 30]} opacity={0.2} drift={0.004} />
-      <CloudVeil position={[48, 69, -250]} scale={[138, 36]} opacity={0.15} drift={0.0028} />
-      <CloudVeil position={[4, 91, -330]} scale={[190, 42]} opacity={0.1} drift={0.002} />
-    </group>
   );
 }
 
@@ -1168,22 +1180,12 @@ export function BabylonJourneyScene() {
 
   return (
     <group>
-      <Sky
-        distance={450000}
-        sunPosition={[-120, 32, -160]}
-        inclination={0.49}
-        azimuth={0.16}
-        turbidity={5.4}
-        rayleigh={1.55}
-        mieCoefficient={0.0042}
-        mieDirectionalG={0.82}
-      />
-      <color attach="background" args={["#9eb8cb"]} />
-      <MorningClouds />
-      <hemisphereLight args={["#c7d9e5", "#35261d", 1.1]} />
+      <BabylonSky />
+      <color attach="background" args={["#91b3cc"]} />
+      <hemisphereLight args={["#d7e5ed", "#513622", 1.45]} />
       <directionalLight
         position={[-96, 48, -72]}
-        intensity={2.28}
+        intensity={2.75}
         color="#ffd39b"
         castShadow
         shadow-mapSize-width={2048}
