@@ -1,19 +1,25 @@
 "use client";
 
-import { Sky, useTexture } from "@react-three/drei";
+import { useTexture } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useScrollState } from "@/components/ScrollController";
+import { getApproachProgress } from "@/lib/journeyTimeline";
 
-export const RIVER_X = -40;
-export const ROAD_X = 20;
-export const GATE_Z = -116;
+import { IshtarGateModel } from "@/components/world/IshtarGateModel";
+import { River } from "@/components/world/River";
+import { BabylonSky } from "@/components/world/BabylonSky";
+import { HORIZON_COLOR } from "@/components/world/atmosphereShader";
+import { makeGroundMaterial } from "@/components/world/groundMaterial";
+import { RIVER_X, ROAD_X, GATE_Z, SUN_DIRECTION, ACCESS_POINTS, riverCenterAt, riverHalfWidthAt, bankHeightAt } from "@/lib/journeyLayout";
+export { RIVER_X, ROAD_X, GATE_Z } from "@/lib/journeyLayout";
 
 type BabylonMaterials = {
   blue: THREE.MeshPhysicalMaterial;
   blueDark: THREE.MeshPhysicalMaterial;
   mud: THREE.MeshStandardMaterial;
+  wetMud: THREE.MeshStandardMaterial;
   city: THREE.MeshStandardMaterial;
   mudDark: THREE.MeshStandardMaterial;
   stone: THREE.MeshStandardMaterial;
@@ -28,75 +34,30 @@ const seeded = (seed: number) => {
   return value - Math.floor(value);
 };
 
-const riverCenterAt = (z: number) => RIVER_X + Math.sin((z + 22) * 0.018) * 1.55;
-
-function makeRiverGeometry() {
-  const rows = 150;
-  const columns = 12;
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-
-  for (let row = 0; row <= rows; row += 1) {
-    const t = row / rows;
-    const z = THREE.MathUtils.lerp(132, -176, t);
-    const center = riverCenterAt(z);
-    for (let column = 0; column <= columns; column += 1) {
-      const across = column / columns;
-      positions.push(center + THREE.MathUtils.lerp(-12.5, 12.5, across), 0.16, z);
-      uvs.push(across, t * 9);
-    }
-  }
-
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      const a = row * (columns + 1) + column;
-      const b = a + columns + 1;
-      indices.push(a, a + 1, b, b, a + 1, b + 1);
-    }
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
 
 function makeBankGeometry(side: -1 | 1) {
-  const rows = 112;
-  const columns = 6;
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-
-  for (let row = 0; row <= rows; row += 1) {
-    const t = row / rows;
-    const z = THREE.MathUtils.lerp(135, -180, t);
-    const center = riverCenterAt(z);
-    const rough = Math.sin(t * 37) * 0.38 + Math.sin(t * 91) * 0.14;
-    const riverEdge = 12.25 + rough;
-    const offsets = [riverEdge, riverEdge + 2.5, riverEdge + 7, riverEdge + 17, riverEdge + 36, riverEdge + 82];
-    const heights = [-0.06, 0.22, 0.68, 1.03, 1.18, 1.3];
-    for (let column = 0; column < columns; column += 1) {
-      positions.push(center + offsets[column] * side, heights[column] + rough * 0.09, z);
-      uvs.push((column / (columns - 1)) * 7, t * 24);
-    }
+  const rows = 196;
+  const offsets = [-0.45, 1.2, 4, 9, 20, 40, 80, 140, 260];
+  const positions: number[] = [], colors: number[] = [], indices: number[] = [];
+  const wet = new THREE.Color("#756858"), dry = new THREE.Color("#ffffff");
+  for (let row = 0; row <= rows; row++) {
+    const z = THREE.MathUtils.lerp(170, -420, row / rows);
+    offsets.forEach((distance) => {
+      positions.push(riverCenterAt(z) + side * (riverHalfWidthAt(z) + distance), bankHeightAt(distance, z), z);
+      const color = wet.clone().lerp(dry, THREE.MathUtils.smoothstep(distance, 0.4, 8));
+      colors.push(color.r, color.g, color.b);
+    });
   }
-
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns - 1; column += 1) {
-      const a = row * columns + column;
-      const b = a + columns;
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < offsets.length - 1; column++) {
+      const a = row * offsets.length + column, b = a + offsets.length;
       if (side === 1) indices.push(a, a + 1, b, b, a + 1, b + 1);
       else indices.push(a, b, a + 1, b, b + 1, a + 1);
     }
   }
-
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
@@ -131,25 +92,21 @@ function makeRibbonGeometry(points: THREE.Vector3[], width: number, segments = 7
 }
 
 function makeFrondGeometry() {
-  const segments = 11;
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-  for (let index = 0; index <= segments; index += 1) {
-    const t = index / segments;
-    const x = t * 4.8;
-    const y = Math.sin(t * Math.PI) * 0.46 - Math.pow(t, 1.55) * 1.58;
-    const width = THREE.MathUtils.lerp(0.36, 0.018, t);
-    positions.push(x, y, -width, x, y, width);
-    uvs.push(t, 0, t, 1);
-    if (index < segments) {
-      const a = index * 2;
-      indices.push(a, a + 2, a + 1, a + 2, a + 3, a + 1);
+  const positions: number[] = [], indices: number[] = [];
+  // Separate tapered leaflets create a date-palm silhouette, instead of ribbons.
+  for (let i = 0; i < 19; i++) {
+    const t = i / 19, next = (i + 0.7) / 19;
+    const y = Math.sin(t * Math.PI) * 0.45 - t * t * 1.4;
+    const yn = Math.sin(next * Math.PI) * 0.45 - next * next * 1.4;
+    const length = Math.sin((t * 0.82 + 0.15) * Math.PI) * 0.84;
+    for (const side of [-1, 1]) {
+      const start = positions.length / 3;
+      positions.push(t * 4.8, y, 0, t * 4.8 + 0.42, y - 0.13, length * side, next * 4.8, yn, 0);
+      indices.push(start, start + 1, start + 2);
     }
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
@@ -189,40 +146,12 @@ function makeAnimalReliefGeometry() {
   return geometry;
 }
 
-function River() {
-  const geometry = useMemo(() => makeRiverGeometry(), []);
-  useEffect(() => () => geometry.dispose(), [geometry]);
-
-  return (
-    <mesh geometry={geometry} receiveShadow>
-      <meshPhysicalMaterial
-        color="#1f6379"
-        roughness={0.16}
-        metalness={0.1}
-        clearcoat={1}
-        clearcoatRoughness={0.12}
-        reflectivity={0.8}
-        transparent
-        opacity={0.98}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
-  );
-}
-
-function RiverBanks({ material }: { material: THREE.Material }) {
+function RiverBanks() {
   const west = useMemo(() => makeBankGeometry(-1), []);
   const east = useMemo(() => makeBankGeometry(1), []);
-  useEffect(() => () => {
-    west.dispose();
-    east.dispose();
-  }, [east, west]);
-  return (
-    <group>
-      <mesh geometry={west} material={material} receiveShadow />
-      <mesh geometry={east} material={material} receiveShadow />
-    </group>
-  );
+  const material = useMemo(() => makeGroundMaterial(), []);
+  useEffect(() => () => { west.dispose(); east.dispose(); material.dispose(); }, [east, west, material]);
+  return <group><mesh geometry={west} material={material} receiveShadow /><mesh geometry={east} material={material} receiveShadow /></group>;
 }
 
 function PalmGrove() {
@@ -235,10 +164,10 @@ function PalmGrove() {
   const palms = useMemo(
     () => Array.from({ length: palmCount }, (_, index) => {
       const side = index % 2 === 0 ? -1 : 1;
-      const z = 118 - seeded(index + 28) * 272;
-      const eastRouteGap = side === 1 && z < 44 && z > -22;
+      let z = 118 - seeded(index + 28) * 272;
+      if (side === 1 && z < 62 && z > -42) z = 80 + seeded(index + 22) * 35;
       return {
-        x: riverCenterAt(z) + side * (16 + seeded(index + 81) * (eastRouteGap ? 9 : 20)),
+        x: riverCenterAt(z) + side * (riverHalfWidthAt(z) + 7 + seeded(index + 81) * 18),
         z,
         height: 0.72 + seeded(index + 177) * 0.66,
         twist: seeded(index + 251) * Math.PI * 2,
@@ -253,7 +182,8 @@ function PalmGrove() {
     palms.forEach((palm, palmIndex) => {
       const trunkHeight = 7.8 * palm.height;
       if (trunks.current) {
-        dummy.position.set(palm.x, trunkHeight / 2, palm.z);
+        const baseY = bankHeightAt(Math.abs(palm.x - riverCenterAt(palm.z)) - riverHalfWidthAt(palm.z), palm.z);
+        dummy.position.set(palm.x, baseY + trunkHeight / 2, palm.z);
         dummy.rotation.set(palm.lean, palm.twist, -palm.lean * 0.55);
         dummy.scale.set(palm.height, palm.height, palm.height);
         dummy.updateMatrix();
@@ -261,7 +191,7 @@ function PalmGrove() {
         trunks.current.setColorAt(palmIndex, new THREE.Color(palmIndex % 3 === 0 ? "#7f553c" : "#533422"));
       }
       if (crowns.current) {
-        dummy.position.set(palm.x, trunkHeight + 0.08, palm.z);
+        dummy.position.set(palm.x, trunkHeight + 1.05, palm.z);
         dummy.rotation.set(0, palm.twist, 0);
         dummy.scale.setScalar(palm.height);
         dummy.updateMatrix();
@@ -270,7 +200,7 @@ function PalmGrove() {
       for (let leafIndex = 0; leafIndex < leavesPerPalm; leafIndex += 1) {
         if (!fronds.current) continue;
         const instance = palmIndex * leavesPerPalm + leafIndex;
-        dummy.position.set(palm.x, trunkHeight + 0.28, palm.z);
+        dummy.position.set(palm.x, trunkHeight + 1.25, palm.z);
         dummy.rotation.set(
           (seeded(instance + 477) - 0.5) * 0.2,
           palm.twist + (leafIndex / leavesPerPalm) * Math.PI * 2,
@@ -318,9 +248,10 @@ function ReedsAndStones() {
     for (let index = 0; index < reedCount; index += 1) {
       if (!reeds.current) break;
       const side = index % 2 === 0 ? -1 : 1;
-      const z = 125 - seeded(index + 122) * 290;
+      let z = 125 - seeded(index + 122) * 290;
+      if (side === 1 && z > 36 && z < 58) z -= 26;
       const height = 0.55 + seeded(index + 31) * 1.45;
-      dummy.position.set(riverCenterAt(z) + side * (12.4 + seeded(index + 73) * 3.2), height / 2, z);
+      dummy.position.set(riverCenterAt(z) + side * (riverHalfWidthAt(z) + seeded(index + 73) * 2.8), height / 2, z);
       dummy.rotation.set(0, seeded(index + 178) * Math.PI, (seeded(index + 205) - 0.5) * 0.2);
       dummy.scale.set(1, height, 1);
       dummy.updateMatrix();
@@ -332,7 +263,7 @@ function ReedsAndStones() {
       const side = index % 2 === 0 ? -1 : 1;
       const z = 121 - seeded(index + 466) * 285;
       const scale = 0.2 + seeded(index + 388) * 0.68;
-      dummy.position.set(riverCenterAt(z) + side * (13.2 + seeded(index + 421) * 8), scale * 0.3, z);
+      dummy.position.set(riverCenterAt(z) + side * (riverHalfWidthAt(z) + 1.2 + seeded(index + 421) * 6), bankHeightAt(1.2 + seeded(index + 421) * 6, z) + scale * 0.22, z);
       dummy.rotation.set(seeded(index + 501), seeded(index + 543) * Math.PI, seeded(index + 577));
       dummy.scale.set(scale * 1.45, scale * 0.72, scale);
       dummy.updateMatrix();
@@ -359,27 +290,78 @@ function ReedsAndStones() {
   );
 }
 
-function RiverBoat({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+function RiverCoracle({
+  position,
+  scale = 1,
+  rotationY = 0,
+}: {
+  position: [number, number, number];
+  scale?: number;
+  rotationY?: number;
+}) {
   const boat = useRef<THREE.Group>(null);
+  const hull = useMemo(() => new THREE.LatheGeometry([
+    new THREE.Vector2(0, -0.12), new THREE.Vector2(0.8, -0.12),
+    new THREE.Vector2(1.23, 0.04), new THREE.Vector2(1.48, 0.28),
+    new THREE.Vector2(1.55, 0.5), new THREE.Vector2(1.44, 0.5),
+    new THREE.Vector2(1.28, 0.3), new THREE.Vector2(0.92, 0.2), new THREE.Vector2(0, 0.2),
+  ], 40), []);
+  useEffect(() => () => hull.dispose(), [hull]);
   useFrame(({ clock }) => {
     if (!boat.current) return;
-    boat.current.position.y = position[1] + Math.sin(clock.elapsedTime * 0.66 + position[2]) * 0.055;
+    const t = clock.elapsedTime, x = position[0], z = position[2];
+    // Match riverWave so crests do not pass through the coracle's inner floor.
+    const wave = Math.sin(z * 0.16 + t * 0.55) * 0.065
+      + Math.sin(x * 0.72 - z * 0.055 - t * 0.48) * 0.035
+      + Math.sin(x * 2.05 + z * 0.48 + t * 0.94) * 0.018
+      + Math.sin(x * 3.8 - z * 0.28 - t * 1.15) * 0.009;
+    boat.current.position.y = position[1] + wave;
     boat.current.rotation.z = Math.sin(clock.elapsedTime * 0.43 + position[0]) * 0.016;
   });
   return (
-    <group ref={boat} position={position} scale={scale}>
-      <mesh scale={[1.22, 0.23, 2.95]} castShadow>
-        <sphereGeometry args={[1, 30, 14, 0, Math.PI * 2, 0, Math.PI * 0.61]} />
-        <meshStandardMaterial color="#3a2216" roughness={0.94} side={THREE.DoubleSide} />
+    <group ref={boat} position={position} rotation={[0, rotationY, 0]} scale={scale}>
+      <mesh geometry={hull} castShadow receiveShadow>
+        <meshStandardMaterial color="#5a3a22" roughness={0.96} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[0, 1.36, 0]} castShadow>
-        <cylinderGeometry args={[0.035, 0.065, 2.85, 8]} />
-        <meshStandardMaterial color="#352117" roughness={1} />
+      <mesh position={[0, 0.51, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <torusGeometry args={[1.53, 0.1, 8, 36]} />
+        <meshStandardMaterial color="#87623a" roughness={0.91} />
       </mesh>
-      <mesh position={[0.44, 1.42, 0]} rotation={[0, 0, -0.13]} castShadow>
-        <planeGeometry args={[0.98, 2.2, 2, 2]} />
-        <meshStandardMaterial color="#d2c098" roughness={0.9} side={THREE.DoubleSide} />
-      </mesh>
+      {[
+        [1.34, 0.28],
+        [1.12, 0.03],
+      ].map(([radius, y]) => (
+        <mesh key={y} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <torusGeometry args={[radius, 0.026, 5, 32]} />
+          <meshStandardMaterial color="#b28a51" roughness={1} />
+        </mesh>
+      ))}
+      {[-0.42, 0.42].map((z) => (
+        <mesh key={z} position={[0, 0.55, z]} castShadow>
+          <boxGeometry args={[2.55, 0.09, 0.1]} />
+          <meshStandardMaterial color="#765032" roughness={0.94} />
+        </mesh>
+      ))}
+      <group position={[0.08, 0.72, 0.04]} rotation={[0, -0.22, 0]}>
+        <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[0.035, 0.045, 3.45, 8]} />
+          <meshStandardMaterial color="#4b3020" roughness={0.92} />
+        </mesh>
+        <mesh position={[1.83, 0, 0]} rotation={[0, 0, -0.14]} castShadow>
+          <boxGeometry args={[0.62, 0.34, 0.07]} />
+          <meshStandardMaterial color="#66452a" roughness={0.95} />
+        </mesh>
+      </group>
+      {[
+        [-0.44, 0.62, 0.02],
+        [0.18, 0.64, -0.14],
+        [0.55, 0.6, 0.22],
+      ].map(([x, y, z], index) => (
+        <mesh key={index} position={[x, y, z]} scale={[0.38, 0.28, 0.34]} castShadow>
+          <dodecahedronGeometry args={[1, 1]} />
+          <meshStandardMaterial color={index === 1 ? "#b28e58" : "#967342"} roughness={1} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -428,7 +410,7 @@ function CityDistrict({ material }: { material: THREE.Material }) {
 }
 
 function CitadelAndPalaces({ materials }: { materials: BabylonMaterials }) {
-  const towers = [-29, -19, -9, 1, 11];
+  const towers = [-29, -19, -9, 1];
   const blocks: Array<[number, number, number, number, number, number]> = [
     [-20, 8.2, -42, 14, 14, 24],
     [-1, 7.2, -43, 17, 12, 22],
@@ -437,12 +419,12 @@ function CitadelAndPalaces({ materials }: { materials: BabylonMaterials }) {
   ];
   return (
     <group>
-      <mesh position={[-8, 5.4, -52]} castShadow receiveShadow>
-        <boxGeometry args={[43, 10.8, 76, 2, 2, 4]} />
+      <mesh position={[-11, 5.4, -52]} castShadow receiveShadow>
+        <boxGeometry args={[38, 10.8, 76, 2, 2, 4]} />
         <primitive object={materials.mud} attach="material" />
       </mesh>
-      <mesh position={[-8, 6.35, -10.5]} castShadow receiveShadow>
-        <boxGeometry args={[44, 12.7, 7]} />
+      <mesh position={[-11, 6.35, -10.5]} castShadow receiveShadow>
+        <boxGeometry args={[36, 12.7, 7]} />
         <primitive object={materials.mudDark} attach="material" />
       </mesh>
       {towers.map((x, index) => (
@@ -469,8 +451,8 @@ function CitadelAndPalaces({ materials }: { materials: BabylonMaterials }) {
           <primitive object={index % 2 ? materials.mudDark : materials.mud} attach="material" />
         </mesh>
       ))}
-      <mesh position={[-8, 11.35, -49]} castShadow>
-        <boxGeometry args={[41, 0.55, 69]} />
+      <mesh position={[-11, 11.35, -49]} castShadow>
+        <boxGeometry args={[36, 0.55, 69]} />
         <primitive object={materials.mudDark} attach="material" />
       </mesh>
     </group>
@@ -478,15 +460,7 @@ function CitadelAndPalaces({ materials }: { materials: BabylonMaterials }) {
 }
 
 function AccessRoute({ material }: { material: THREE.Material }) {
-  const geometry = useMemo(() => makeRibbonGeometry([
-    new THREE.Vector3(-27, 1.35, 50),
-    new THREE.Vector3(-24, 1.38, 40),
-    new THREE.Vector3(-17, 1.4, 29),
-    new THREE.Vector3(-5, 1.42, 17),
-    new THREE.Vector3(7, 1.44, 4),
-    new THREE.Vector3(15, 1.45, -8),
-    new THREE.Vector3(ROAD_X, 1.46, -20),
-  ], 8.4), []);
+  const geometry = useMemo(() => makeRibbonGeometry(ACCESS_POINTS.map((point) => new THREE.Vector3(...point)), 7.6), []);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return <mesh geometry={geometry} material={material} receiveShadow />;
 }
@@ -610,13 +584,15 @@ function RoadLionFriezes({ materials }: { materials: BabylonMaterials }) {
 }
 
 function ProcessionalWay({ materials }: { materials: BabylonMaterials }) {
-  const roadLength = 132;
-  const roadCenterZ = (20 + GATE_Z) / 2;
+  // Extend the existing paving through the full 24.5-unit-deep gate and
+  // past the new camera endpoint; there is no floor seam at the threshold.
+  const roadLength = 185;
+  const roadCenterZ = -122.5;
   const wallCenterZ = (-20 + GATE_Z) / 2;
   const wallLength = Math.abs(GATE_Z + 20);
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[ROAD_X, 1.34, roadCenterZ]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[ROAD_X, 1.44, roadCenterZ]} receiveShadow>
         <planeGeometry args={[16.8, roadLength, 10, 64]} />
         <primitive object={materials.stone} attach="material" />
       </mesh>
@@ -638,186 +614,21 @@ function ProcessionalWay({ materials }: { materials: BabylonMaterials }) {
       ))}
       <RoadMerlons material={materials.mudDark} />
       <RoadLionFriezes materials={materials} />
-    </group>
-  );
-}
-
-function GateFacade({ z, scale = 1, materials }: { z: number; scale?: number; materials: BabylonMaterials }) {
-  const animalGeometry = useMemo(() => makeAnimalReliefGeometry(), []);
-  const goldReliefs = useRef<THREE.InstancedMesh>(null);
-  const ivoryReliefs = useRef<THREE.InstancedMesh>(null);
-  const reliefs = useMemo(() => {
-    const placements: Array<{ position: [number, number, number]; gold: boolean; flip: boolean }> = [];
-    for (const towerX of [-10.4, 10.4]) {
-      for (let row = 0; row < 6; row += 1) {
-        for (let column = 0; column < 2; column += 1) {
-          placements.push({
-            position: [towerX - 1.55 + column * 3.1, 4.3 + row * 3.65, 5.04],
-            gold: (row + column + (towerX > 0 ? 1 : 0)) % 2 === 0,
-            flip: towerX > 0,
-          });
-        }
-      }
-    }
-    return placements;
-  }, []);
-
-  useLayoutEffect(() => {
-    const dummy = new THREE.Object3D();
-    let goldIndex = 0;
-    let ivoryIndex = 0;
-    reliefs.forEach((relief) => {
-      const mesh = relief.gold ? goldReliefs.current : ivoryReliefs.current;
-      if (!mesh) return;
-      const index = relief.gold ? goldIndex++ : ivoryIndex++;
-      dummy.position.set(...relief.position);
-      dummy.scale.set(relief.flip ? -0.78 : 0.78, 0.78, 0.78);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(index, dummy.matrix);
-    });
-    [goldReliefs.current, ivoryReliefs.current].forEach((mesh) => {
-      if (mesh) mesh.instanceMatrix.needsUpdate = true;
-    });
-  }, [reliefs]);
-  useEffect(() => () => animalGeometry.dispose(), [animalGeometry]);
-
-  return (
-    <group position={[0, 0, z]} scale={scale}>
-      {[-10.4, 10.4].map((x) => (
-        <group key={x}>
-          <mesh position={[x, 13.5, 0]} castShadow receiveShadow>
-            <boxGeometry args={[9.4, 27, 10]} />
-            <primitive object={materials.blue} attach="material" />
-          </mesh>
-          <mesh position={[x, 27.7, 0.1]} castShadow>
-            <boxGeometry args={[9.9, 0.8, 10.4]} />
-            <primitive object={materials.gold} attach="material" />
-          </mesh>
-          <group position={[x, 0, 0]}>
-            <MerlonRow width={9.4} depth={9.5} y={29} material={materials.blue} />
-          </group>
-        </group>
-      ))}
-      <mesh position={[0, 19.1, 0]} castShadow receiveShadow>
-        <boxGeometry args={[11.5, 8.4, 8.8]} />
-        <primitive object={materials.blue} attach="material" />
-      </mesh>
-      <mesh position={[0, 23.52, 0.15]} castShadow>
-        <boxGeometry args={[11.8, 0.7, 9.15]} />
-        <primitive object={materials.gold} attach="material" />
-      </mesh>
-      <MerlonRow width={11.5} depth={8.4} y={25.1} material={materials.blue} />
-      <mesh position={[0, 10.6, 4.47]} castShadow>
-        <torusGeometry args={[5.25, 0.68, 14, 72, Math.PI]} />
-        <primitive object={materials.gold} attach="material" />
-      </mesh>
-      {[-5.25, 5.25].map((x) => (
-        <mesh key={x} position={[x, 5.35, 4.47]} castShadow>
-          <boxGeometry args={[1.34, 10.7, 0.42]} />
-          <primitive object={materials.gold} attach="material" />
-        </mesh>
-      ))}
-      <mesh position={[0, 10.6, 4.71]} castShadow>
-        <torusGeometry args={[4.55, 0.18, 10, 72, Math.PI]} />
-        <primitive object={materials.ivory} attach="material" />
-      </mesh>
-      {[-4.55, 4.55].map((x) => (
-        <mesh key={x} position={[x, 5.3, 4.71]} castShadow>
-          <boxGeometry args={[0.36, 10.6, 0.18]} />
-          <primitive object={materials.ivory} attach="material" />
-        </mesh>
-      ))}
-      <group position={[0, 0, 4.31]}>
-        {[-2.15, 2.15].map((x) => (
-          <mesh key={x} position={[x, 5.3, 0]} castShadow>
-            <boxGeometry args={[4.12, 10.6, 0.58]} />
-            <primitive object={materials.wood} attach="material" />
-          </mesh>
-        ))}
-        <mesh position={[0, 10.55, 0]} castShadow>
-          <circleGeometry args={[4.15, 56, 0, Math.PI]} />
-          <primitive object={materials.wood} attach="material" />
-        </mesh>
-        {[-3.2, -2.15, -1.08, 0, 1.08, 2.15, 3.2].map((x) => (
-          <mesh key={x} position={[x, 5.55, 0.34]} castShadow>
-            <boxGeometry args={[0.085, 10.25, 0.09]} />
-            <primitive object={materials.bronze} attach="material" />
-          </mesh>
-        ))}
-        {[2.4, 5.45, 8.5].map((y) => (
-          <mesh key={y} position={[0, y, 0.36]} castShadow>
-            <boxGeometry args={[8.05, 0.22, 0.11]} />
-            <primitive object={materials.bronze} attach="material" />
-          </mesh>
-        ))}
-      </group>
-      {[-10.4, 10.4].flatMap((x) => [2.5, 6.15, 9.8, 13.45, 17.1, 20.75, 24.4].map((y) => (
-        <mesh key={`${x}-${y}`} position={[x, y, 5.06]} castShadow>
-          <boxGeometry args={[8.55, 0.19, 0.15]} />
-          <primitive object={materials.gold} attach="material" />
-        </mesh>
-      )))}
-      <instancedMesh ref={goldReliefs} args={[animalGeometry, materials.gold, reliefs.filter((r) => r.gold).length]} castShadow />
-      <instancedMesh ref={ivoryReliefs} args={[animalGeometry, materials.ivory, reliefs.filter((r) => !r.gold).length]} castShadow />
-    </group>
-  );
-}
-
-function IshtarGate({ materials }: { materials: BabylonMaterials }) {
-  return (
-    <group position={[ROAD_X, 1.35, GATE_Z]}>
-      <GateFacade z={0} materials={materials} />
-      <GateFacade z={-15} scale={1.09} materials={materials} />
-      {[-15.9, 15.9].map((x) => (
-        <group key={x}>
-          <mesh position={[x, 11.2, -7.5]} castShadow receiveShadow>
-            <boxGeometry args={[5.7, 22.4, 15]} />
-            <primitive object={materials.blueDark} attach="material" />
-          </mesh>
-          <mesh position={[x, 22.75, -7.5]} castShadow>
-            <boxGeometry args={[6, 0.7, 15.4]} />
-            <primitive object={materials.gold} attach="material" />
-          </mesh>
-        </group>
-      ))}
-      {[-38, 38].map((x) => (
-        <group key={x}>
-          <mesh position={[x, 7.1, -2.5]} castShadow receiveShadow>
-            <boxGeometry args={[37, 14.2, 10]} />
+      {[-1, 1].map((side) => (
+        <group key={`inner-${side}`}>
+          <mesh position={[ROAD_X + side * 11.2, 4.05, GATE_Z - 63]} castShadow receiveShadow>
+            <boxGeometry args={[3.3, 5.5, 75]} />
             <primitive object={materials.mud} attach="material" />
           </mesh>
-          <group position={[x, 0, -2.5]}>
-            <MerlonRow width={37} depth={9.4} y={14.9} material={materials.mudDark} />
-          </group>
+          <mesh position={[ROAD_X + side * 9.52, 3.35, GATE_Z - 63]} castShadow receiveShadow>
+            <boxGeometry args={[0.2, 4.1, 75]} />
+            <primitive object={materials.blueDark} attach="material" />
+          </mesh>
+          <mesh position={[ROAD_X + side * 9.38, 5.43, GATE_Z - 63]}>
+            <boxGeometry args={[0.13, 0.18, 75]} />
+            <primitive object={materials.gold} attach="material" />
+          </mesh>
         </group>
-      ))}
-    </group>
-  );
-}
-
-function MovingMist() {
-  const { globalProgress } = useScrollState();
-  const materials = useRef<Array<THREE.MeshBasicMaterial | null>>([]);
-  useFrame(({ clock }) => {
-    const fade = 1 - THREE.MathUtils.smoothstep(globalProgress, 0.38, 0.9);
-    materials.current.forEach((material, index) => {
-      if (!material) return;
-      material.opacity = fade * (0.13 + index * 0.035) * (0.86 + Math.sin(clock.elapsedTime * 0.17 + index) * 0.14);
-    });
-  });
-  return (
-    <group>
-      {[-54, -82, -106].map((z, index) => (
-        <mesh key={z} position={[ROAD_X, 7 + index * 1.7, z]}>
-          <planeGeometry args={[72 + index * 16, 20 + index * 5]} />
-          <meshBasicMaterial
-            ref={(material) => { materials.current[index] = material; }}
-            color="#d1b18e"
-            transparent
-            opacity={0.18}
-            depthWrite={false}
-          />
-        </mesh>
       ))}
     </group>
   );
@@ -827,7 +638,7 @@ function Atmosphere() {
   const scene = useThree((state) => state.scene);
   const { globalProgress } = useScrollState();
   useEffect(() => {
-    const fog = new THREE.Fog("#aa8d73", 28, 112);
+    const fog = new THREE.Fog(HORIZON_COLOR, 75, 285);
     scene.fog = fog;
     return () => {
       if (scene.fog === fog) scene.fog = null;
@@ -835,9 +646,9 @@ function Atmosphere() {
   }, [scene]);
   useFrame(() => {
     if (!(scene.fog instanceof THREE.Fog)) return;
-    const reveal = THREE.MathUtils.smoothstep(globalProgress, 0.22, 0.9);
-    scene.fog.near = THREE.MathUtils.lerp(25, 42, reveal);
-    scene.fog.far = THREE.MathUtils.lerp(108, 238, reveal);
+    const reveal = THREE.MathUtils.smoothstep(getApproachProgress(globalProgress), 0.22, 0.9);
+    scene.fog.near = THREE.MathUtils.lerp(75, 105, reveal);
+    scene.fog.far = THREE.MathUtils.lerp(285, 380, reveal);
   });
   return null;
 }
@@ -897,6 +708,14 @@ export function BabylonJourneyScene() {
       color: "#a77a57",
       roughness: 0.93,
     }),
+    wetMud: new THREE.MeshStandardMaterial({
+      map: mudMap,
+      bumpMap: mudBump,
+      bumpScale: 0.14,
+      color: "#5c4939",
+      roughness: 0.63,
+      metalness: 0.01,
+    }),
     city: new THREE.MeshStandardMaterial({
       map: mudMap,
       bumpMap: mudBump,
@@ -931,22 +750,13 @@ export function BabylonJourneyScene() {
 
   return (
     <group>
-      <Sky
-        distance={450000}
-        sunPosition={[-96, 28, -92]}
-        inclination={0.49}
-        azimuth={0.16}
-        turbidity={8.6}
-        rayleigh={2.15}
-        mieCoefficient={0.0065}
-        mieDirectionalG={0.86}
-      />
-      <color attach="background" args={["#806f67"]} />
-      <hemisphereLight args={["#e8cfaa", "#251c19", 1.05]} />
+      <BabylonSky />
+      <color attach="background" args={["#91b3cc"]} />
+      <hemisphereLight args={["#d5e6f2", "#79614a", 1.6]} />
       <directionalLight
-        position={[-72, 56, 38]}
+        position={SUN_DIRECTION.clone().multiplyScalar(130)}
         intensity={2.55}
-        color="#ffd093"
+        color="#ffe0b2"
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -959,20 +769,20 @@ export function BabylonJourneyScene() {
         shadow-camera-top={90}
         shadow-camera-bottom={-55}
       />
+      <directionalLight position={[72, 34, 48]} intensity={0.48} color="#c7d8de" />
       <pointLight position={[ROAD_X, 17, GATE_Z + 12]} intensity={3.2} distance={90} color="#d9984f" />
       <River />
-      <RiverBanks material={materials.mud} />
+      <RiverBanks />
       <PalmGrove />
       <ReedsAndStones />
-      <RiverBoat position={[RIVER_X - 3.2, 0.02, 55]} scale={0.82} />
-      <RiverBoat position={[RIVER_X + 4.1, 0.01, -26]} scale={0.66} />
+      <RiverCoracle position={[RIVER_X - 4.8, 0.18, 34]} scale={0.78} rotationY={-0.18} />
+      <RiverCoracle position={[RIVER_X + 4.6, 0.16, -43]} scale={0.66} rotationY={0.24} />
       <CityDistrict material={materials.city} />
       <CitadelAndPalaces materials={materials} />
       <AccessRoute material={materials.stone} />
       <DefensiveCanal />
       <ProcessionalWay materials={materials} />
-      <IshtarGate materials={materials} />
-      <MovingMist />
+      <IshtarGateModel />
       <Atmosphere />
     </group>
   );

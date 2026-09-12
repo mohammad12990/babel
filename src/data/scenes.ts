@@ -83,20 +83,13 @@ export const SCENES: SceneDefinition[] = [
   {
     id: "processional-way",
     index: 3,
-    title: "PROCESSIONAL WAY",
+    title: "THROUGH THE ISHTAR GATE",
     scrollLengthVh: 260,
     cameraKeyframes: [
       { progress: 0, position: [0, 1.7, 0], lookAt: [0, 1.7, -12], fov: 45 },
       { progress: 1, position: [0, 1.8, -46], lookAt: [0, 1.8, -60], fov: 45 },
     ],
-    onScreenText: [
-      {
-        at: 0.5,
-        until: 0.75,
-        subtext:
-          "The Processional Way carried Babylon's most sacred festival, the Akitu, from the palace to the temple of Marduk.",
-      },
-    ],
+    onScreenText: [],
     hotspotIds: ["daily-life-note"],
     ambienceTrack: "market_spatial",
     transitionOut: "rise",
