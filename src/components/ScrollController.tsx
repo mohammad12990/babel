@@ -11,11 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { SCENES } from "@/data/scenes";
-
-const JOURNEY_SCENES = SCENES.slice(0, 2);
-const totalJourneyLength = JOURNEY_SCENES.reduce((sum, scene) => sum + scene.scrollLengthVh, 0);
-const approachShare = JOURNEY_SCENES[0].scrollLengthVh / totalJourneyLength;
+import { HOLD_DURATION_SECONDS, JOURNEY_SCENES, resolveJourneyProgress } from "@/lib/journeyTimeline";
 
 export interface ScrollState {
   activeSceneId: string;
@@ -39,24 +35,6 @@ const ScrollContext = createContext<ScrollState>(initialState);
 
 export const useScrollState = () => useContext(ScrollContext);
 
-function stateFromGlobalProgress(progress: number) {
-  const clamped = Math.min(1, Math.max(0, progress));
-  if (clamped < approachShare) {
-    return {
-      activeSceneId: JOURNEY_SCENES[0].id,
-      activeSceneIndex: JOURNEY_SCENES[0].index,
-      sceneProgress: clamped / approachShare,
-      globalProgress: clamped,
-    };
-  }
-  return {
-    activeSceneId: JOURNEY_SCENES[1].id,
-    activeSceneIndex: JOURNEY_SCENES[1].index,
-    sceneProgress: (clamped - approachShare) / (1 - approachShare),
-    globalProgress: clamped,
-  };
-}
-
 export function ScrollController({
   children,
   interactionEnabled = false,
@@ -72,7 +50,7 @@ export function ScrollController({
 
   const updateProgress = useCallback((progress: number) => {
     holdProgress.current = Math.min(1, Math.max(0, progress));
-    const next = stateFromGlobalProgress(holdProgress.current);
+    const next = resolveJourneyProgress(holdProgress.current);
     setState((previous) => ({
       ...previous,
       ...next,
@@ -97,60 +75,19 @@ export function ScrollController({
   }, [interactionEnabled, isHoldMode]);
 
   useEffect(() => {
-    if (isHoldMode) return;
-
+    if (isHoldMode || !interactionEnabled) return;
     const gsap = require("gsap").gsap;
     const ScrollTrigger = require("gsap/ScrollTrigger").ScrollTrigger;
     gsap.registerPlugin(ScrollTrigger);
-
-    const triggers: Array<{ kill: () => void }> = [];
-    const sectionElements = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-scene-section]")
-    );
-
-    sectionElements.forEach((element, index) => {
-      const scene = JOURNEY_SCENES[index];
-      if (!scene) return;
-      triggers.push(
-        ScrollTrigger.create({
-          trigger: element,
-          start: "top top",
-          end: "bottom bottom",
-          onUpdate: (self: { progress: number }) => {
-            setState((previous) => ({
-              ...previous,
-              activeSceneId: scene.id,
-              activeSceneIndex: scene.index,
-              sceneProgress: self.progress,
-            }));
-          },
-          onToggle: (self: { isActive: boolean }) => {
-            if (!self.isActive) return;
-            setState((previous) => ({
-              ...previous,
-              activeSceneId: scene.id,
-              activeSceneIndex: scene.index,
-            }));
-          },
-        })
-      );
+    const trigger = ScrollTrigger.create({
+      trigger: containerRef.current,
+      start: "top top",
+      end: "bottom bottom",
+      onUpdate: (self: { progress: number }) => updateProgress(self.progress),
     });
-
-    triggers.push(
-      ScrollTrigger.create({
-        trigger: containerRef.current,
-        start: "top top",
-        end: "bottom bottom",
-        onUpdate: (self: { progress: number }) => {
-          holdProgress.current = self.progress;
-          setState((previous) => ({ ...previous, globalProgress: self.progress }));
-        },
-      })
-    );
-
     ScrollTrigger.refresh();
-    return () => triggers.forEach((trigger) => trigger.kill());
-  }, [isHoldMode]);
+    return () => trigger.kill();
+  }, [isHoldMode, interactionEnabled, updateProgress]);
 
   useEffect(() => {
     if (!isHoldMode || !interactionEnabled) return;
@@ -161,7 +98,7 @@ export function ScrollController({
       const delta = Math.min(48, time - previousTime);
       previousTime = time;
       if (holding.current && holdProgress.current < 1) {
-        const nextProgress = Math.min(1, holdProgress.current + (delta / 1000) * 0.05);
+        const nextProgress = Math.min(1, holdProgress.current + delta / (1000 * HOLD_DURATION_SECONDS));
         if (nextProgress >= 1) holding.current = false;
         updateProgress(nextProgress);
       }
@@ -174,6 +111,7 @@ export function ScrollController({
 
   const startHolding = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!isHoldMode || !interactionEnabled || holdProgress.current >= 1) return;
+    if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     holding.current = true;
@@ -188,6 +126,19 @@ export function ScrollController({
     holding.current = false;
     setState((previous) => ({ ...previous, isHolding: false }));
   };
+
+  useEffect(() => {
+    const pause = () => {
+      holding.current = false;
+      setState((previous) => ({ ...previous, isHolding: false }));
+    };
+    window.addEventListener("blur", pause);
+    document.addEventListener("visibilitychange", pause);
+    return () => {
+      window.removeEventListener("blur", pause);
+      document.removeEventListener("visibilitychange", pause);
+    };
+  }, []);
 
   const contextValue = useMemo(
     () => ({ ...state, isHoldMode, isHolding: state.isHolding }),

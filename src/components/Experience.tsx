@@ -10,7 +10,7 @@
 //   3. The persistent UI chrome (chapter nav, text overlay, badges).
 
 import { Canvas } from "@react-three/fiber";
-import { Suspense, useState, type CSSProperties } from "react";
+import { Component, Suspense, useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import * as THREE from "three";
 import { ScrollController, useScrollState } from "@/components/ScrollController";
 import { CameraRig } from "@/components/CameraRig";
@@ -18,12 +18,14 @@ import { ChapterNavigation } from "@/components/ChapterNavigation";
 import { SceneTextOverlay } from "@/components/SceneTextOverlay";
 import { AudioManager } from "@/components/AudioManager";
 import { BabylonJourneyScene } from "@/components/scenes/BabylonJourneyScene";
-import { SCENES } from "@/data/scenes";
+import { JourneyMotion } from "@/components/JourneyMotion";
+import { JOURNEY_SCENES } from "@/lib/journeyTimeline";
+import { GATE_OPEN_END } from "@/lib/journeyLayout";
 
 function ScrollTrack() {
   return (
     <>
-      {SCENES.slice(0, 2).map((scene) => (
+      {JOURNEY_SCENES.map((scene) => (
         <section
           key={scene.id}
           data-scene-section
@@ -35,7 +37,19 @@ function ScrollTrack() {
   );
 }
 
-function IntroGate({ onBegin }: { onBegin: () => void }) {
+class SceneBoundary extends Component<{ children: ReactNode; onError: () => void }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { this.props.onError(); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
+
+function SceneReady({ onReady }: { onReady: () => void }) {
+  useEffect(onReady, [onReady]);
+  return null;
+}
+
+function IntroGate({ onBegin, ready, failed }: { onBegin: () => void; ready: boolean; failed: boolean }) {
   return (
     <div className="intro-gate">
       <p className="intro-gate-kicker">AN INTERACTIVE ARCHAEOLOGICAL JOURNEY</p>
@@ -45,33 +59,39 @@ function IntroGate({ onBegin }: { onBegin: () => void }) {
       </p>
       <button
         className="intro-gate-button"
+        disabled={!ready || failed}
         onClick={() => {
           window.scrollTo({ top: 0 });
           onBegin();
         }}
       >
-        Enter the city
+        {failed ? "3D unavailable" : ready ? "Enter the city" : "Preparing the journey…"}
       </button>
+      {failed && <p role="alert" className="scene-error">The 3D scene could not load. Check your connection and try a browser with graphics acceleration enabled.</p>}
       <p className="intro-gate-note">Babylon · 605–562 BCE</p>
+      <a className="model-credit" href="/models/ATTRIBUTION.md" target="_blank" rel="noreferrer">Ishtar Gate model · Hassan Hadi · CC BY 4.0</a>
     </div>
   );
 }
 
 function InteractionCue() {
-  const { isHoldMode, isHolding, globalProgress } = useScrollState();
+  const { isHoldMode, isHolding, globalProgress, activeSceneIndex, sceneProgress } = useScrollState();
+  if (globalProgress >= 0.995) return null;
+  const atGate = activeSceneIndex === 3;
+  const opening = atGate && sceneProgress < GATE_OPEN_END;
 
   if (isHoldMode) {
     return (
       <div className={"hold-cue" + (isHolding ? " hold-cue-active" : "")} aria-hidden="true">
         <span className="hold-cue-ring" style={{ "--hold-progress": globalProgress } as CSSProperties} />
-        <span>{isHolding ? "MOVING FORWARD" : "HOLD TO MOVE"}</span>
+        <span>{opening ? (isHolding ? "OPENING THE GATE" : "HOLD TO OPEN THE GATE") : isHolding ? "MOVING FORWARD" : atGate ? "HOLD TO ENTER" : "HOLD TO MOVE"}</span>
       </div>
     );
   }
 
   return (
     <div className="scroll-cue" aria-hidden="true">
-      <span>SCROLL TO APPROACH</span>
+      <span>{opening ? "SCROLL TO OPEN THE GATE" : atGate ? "SCROLL TO ENTER" : "SCROLL TO APPROACH"}</span>
       <i />
     </div>
   );
@@ -79,29 +99,34 @@ function InteractionCue() {
 
 function ArrivalMoment() {
   const { activeSceneIndex, sceneProgress } = useScrollState();
-  if (activeSceneIndex !== 2 || sceneProgress < 0.82) return null;
-  const opacity = Math.min(1, (sceneProgress - 0.82) / 0.12);
+  if (activeSceneIndex !== 3 || sceneProgress < 0.94) return null;
+  const opacity = Math.min(1, (sceneProgress - 0.94) / 0.06);
   return (
     <div className="milestone-end" style={{ opacity }}>
-      <span>THE GATE AWAITS</span>
-      <small>03 / 08 — THE THRESHOLD</small>
+      <span>WITHIN BABYLON</span>
+      <small>03 / 08 — THROUGH THE GATE</small>
     </div>
   );
 }
 
 export function Experience() {
   const [started, setStarted] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const onReady = useCallback(() => setReady(true), []);
+  const onError = useCallback(() => { setFailed(true); setStarted(false); }, []);
 
   return (
     <ScrollController interactionEnabled={started}>
-      {!started && <IntroGate onBegin={() => setStarted(true)} />}
+      {!started && <IntroGate onBegin={() => setStarted(true)} ready={ready} failed={failed} />}
 
       <div className="canvas-layer" aria-hidden={!started}>
+        <SceneBoundary onError={onError}>
         <Canvas
           shadows
           camera={{ position: [-40, 4.25, 112], fov: 45, near: 0.1, far: 720 }}
           gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
-          dpr={[1, 1.8]}
+          dpr={[1, 1.6]}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 0.98;
@@ -111,10 +136,14 @@ export function Experience() {
           }}
         >
           <Suspense fallback={null}>
-            <BabylonJourneyScene />
-            <CameraRig />
+            <JourneyMotion>
+              <BabylonJourneyScene />
+              <CameraRig />
+              <SceneReady onReady={onReady} />
+            </JourneyMotion>
           </Suspense>
         </Canvas>
+        </SceneBoundary>
       </div>
 
       {started && (
